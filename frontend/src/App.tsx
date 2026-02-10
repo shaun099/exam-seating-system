@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { DashboardLayout } from "./component/layout/DashboardLayout";
+
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
+
+import Reports from "./component/pages/Report";
+
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -76,10 +80,17 @@ function App() {
         return <SeatingAllocation />;
       // case "invigilator":
       //   return <InvigilatorMgmt />;
+
       case "configurations":
         return <Configurations />;
       // case "reports":
       //   return <Reports />;
+
+      // case "configurations":
+      //   return <Configurations />;
+      case "reports":
+        return <Reports />;
+
       // case "email":
       //   return <EmailNotifications />;
       default:
