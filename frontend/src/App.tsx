@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DashboardLayout } from "./component/layout/DashboardLayout";
+import Reports from "./pages/Report";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -76,8 +77,8 @@ function App() {
       //   return <InvigilatorMgmt />;
       // case "configurations":
       //   return <Configurations />;
-      // case "reports":
-      //   return <Reports />;
+      case "reports":
+        return <Reports />;
       // case "email":
       //   return <EmailNotifications />;
       default:
