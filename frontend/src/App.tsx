@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DashboardLayout } from "../component/layout/DashboardLayout";
+import { DashboardLayout } from "./component/layout/DashboardLayout";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
