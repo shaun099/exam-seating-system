@@ -1,11 +1,15 @@
+import { LoginForm } from "./Auth/login.tsx"
+import Home from "./App/page.tsx"
+
 function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <h1 className="text-5xl font-semibold text-black-800">
-        Exam Seating System
-      </h1>
-    </div>
-  );
+    <>
+      <Home />
+      <LoginForm onLogin={function (): void {
+        throw new Error("Function not implemented.")
+      } } />
+    </>
+  )
 }
 
-export default App;
+export default App
