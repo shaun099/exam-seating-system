@@ -1,5 +1,8 @@
 import { useState } from "react";
+
 import { DashboardLayout } from "./component/layout/DashboardLayout";
+import { LoginForm } from "./Auth/login.tsx"
+import Home from "./App/page.tsx"
 
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
@@ -134,4 +137,4 @@ function App() {
   );
 }
 
-export default App;
+export default App
