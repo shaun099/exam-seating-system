@@ -6,6 +6,8 @@ import { Configurations } from "./component/pages/configuration";
 
 import Reports from "./component/pages/Report";
 
+import Dashboard from "./component/pages/Dashboard";
+
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -60,13 +62,7 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return (
-          // <DashboardHome
-          //   onStartNewSession={handleStartNewSession}
-          //   onNavigate={handleNavigate}
-          // />
-          <h1>dashboardHome</h1>
-        );
+       return <Dashboard onNavigate={handleNavigate} />;
       // case "new-session":
       //   return (
       //     <SessionWizard
