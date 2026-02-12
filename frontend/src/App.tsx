@@ -7,27 +7,38 @@ import { Configurations } from "./component/pages/configuration";
 import Reports from "./component/pages/Report";
 
 import Dashboard from "./component/pages/Dashboard";
-
+import { SessionDetails } from "./component/pages/ExamSession/SessionDetails";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
-  "new-session": [{ label: "Home", href: "/" }, { label: "New Exam Session" }],
+
+  "exam-session": [
+    { label: "Home", href: "/" },
+    { label: "New Exam Session" },
+  ],
+
   "room-config": [
     { label: "Home", href: "/" },
     { label: "Room Configuration" },
   ],
+
   seating: [{ label: "Home", href: "/" }, { label: "Seating Allocation" }],
+
   invigilator: [
     { label: "Home", href: "/" },
     { label: "Invigilator Management" },
   ],
+
   configurations: [
     { label: "Home", href: "/" },
     { label: "System Configuration" },
   ],
+
   reports: [{ label: "Home", href: "/" }, { label: "Reports" }],
+
   email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
 };
+
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -78,6 +89,15 @@ function App() {
       //   return <Configurations />;
       case "reports":
         return <Reports />;
+
+      case "exam-session":
+        return (
+          <SessionDetails
+            onSubmit={(data) => console.log(data)}
+            onCancel={() => setCurrentPage("dashboard")}
+          />
+        );
+
 
       // case "email":
       //   return <EmailNotifications />;
