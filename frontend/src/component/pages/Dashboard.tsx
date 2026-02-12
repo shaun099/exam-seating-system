@@ -69,7 +69,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
-          onClick={() => onNavigate("configarations")}
+          onClick={() => onNavigate("configurations")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
