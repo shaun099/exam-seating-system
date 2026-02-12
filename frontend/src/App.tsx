@@ -2,8 +2,6 @@ import { useState } from "react";
 
 import { DashboardLayout } from "./component/layout/DashboardLayout";
 import { LoginForm } from "./Auth/login.tsx"
-import Home from "./App/page.tsx"
-
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
 
@@ -47,9 +45,9 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentPage, setCurrentPage] = useState("dashboard");
-  // const handleLogin = () => {
-  //   setIsLoggedIn(true);
-  // };
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -70,8 +68,7 @@ function App() {
   // };
 
   if (!isLoggedIn) {
-    // return <LoginForm onLogin={handleLogin} />
-    <h1>Login please</h1>;
+    return <LoginForm onLogin={handleLogin} />
   }
 
   const renderPage = () => {
@@ -132,10 +129,6 @@ function App() {
       onNavigate={handleNavigate}
       onLogout={handleLogout}
     >
-      <Home />
-      <LoginForm onLogin={function (): void {
-        throw new Error("Function not implemented.")
-      } } />
       {renderPage()}
     </DashboardLayout>
   );
