@@ -54,6 +54,11 @@ const reportTypes = [
   },
 ];
 
+const recentReports = [
+  { semId: "s5", slotId: "s5a", semName: "Semester 5", slotName: "Slot A", generatedAt: "2 hours ago" },
+  { semId: "s3", slotId: "s3b", semName: "Semester 3", slotName: "Slot B", generatedAt: "1 day ago" },
+];
+
 const Reports: React.FC = () => {
   const [activeSemId, setActiveSemId] = useState<string | null>(null);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
@@ -63,9 +68,9 @@ const Reports: React.FC = () => {
   const selectedSlot = availableSlots.find(sl => sl.id === activeSlotId);
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 antialiased font-sans">
-      {/* STICKY HEADER */}
-      <header className="h-16 bg-white backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50 flex items-center justify-between px-8">
+    <div className="fixed top-16 left-64 right-0 bottom-0 overflow-hidden bg-[#fafafa] text-slate-900 antialiased font-sans flex flex-col">
+      {/* NAVIGATION TABS */}
+      <header className="h-14 bg-white backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-8 shrink-0">
         <div className="flex items-center gap-8">
           <nav className="flex items-center gap-1">
             <button 
@@ -93,7 +98,7 @@ const Reports: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-8 py-12">
+      <main className="flex-1 overflow-auto max-w-6xl mx-auto px-8 py-12 w-full">
         {!activeSemId ? (
           /* HOME PAGE: RECENT DOWNLOADS */
           <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -102,39 +107,43 @@ const Reports: React.FC = () => {
                 <h2 className="text-2xl font-bold text-slate-800">Latest Generated Reports</h2>
             </div>
             
-            <div className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm shadow-slate-200/50">
-              <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div>
-                  <h2 className="text-xl font-bold tracking-tight text-slate-800">Semester 5 • Slot A</h2>
-                  <p className="text-sm text-slate-500 font-medium">Generated 2 hours ago</p>
-                </div>
-                <button 
-                  onClick={() => { setActiveSemId("s5"); setActiveSlotId("s5a"); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm"
-                >
-                  View All <ChevronRight size={16} />
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                {reportTypes.map((report, idx) => (
-                  <div key={report.id} className={cn(
-                    "p-8 group hover:bg-slate-50 transition-colors border-slate-100",
-                    idx !== 3 && "lg:border-r",
-                    idx < 2 && "border-b sm:border-b-0",
-                    idx === 1 && "lg:border-b-0"
-                  )}>
-                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6", report.color)}>
-                      <report.icon size={24} />
+            <div className="space-y-6">
+              {recentReports.map((report, index) => (
+                <div key={index} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm shadow-slate-200/50">
+                  <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-slate-800">{report.semName} • {report.slotName}</h2>
+                      <p className="text-sm text-slate-500 font-medium">Generated {report.generatedAt}</p>
                     </div>
-                    <p className="text-sm font-bold text-slate-800 leading-tight mb-2">{report.title}</p>
-                    <p className="text-xs text-slate-400 font-medium mb-6 line-clamp-2 leading-relaxed">{report.description}</p>
-                    <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all uppercase tracking-wider">
-                      <Download size={14} /> Download
+                    <button 
+                      onClick={() => { setActiveSemId(report.semId); setActiveSlotId(report.slotId); }}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                    >
+                      View All <ChevronRight size={16} />
                     </button>
                   </div>
-                ))}
-              </div>
+              
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                    {reportTypes.map((rpt, idx) => (
+                      <div key={rpt.id} className={cn(
+                        "p-8 group hover:bg-slate-50 transition-colors border-slate-100",
+                        idx !== 3 && "lg:border-r",
+                        idx < 2 && "border-b sm:border-b-0",
+                        idx === 1 && "lg:border-b-0"
+                      )}>
+                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6", rpt.color)}>
+                          <rpt.icon size={24} />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 leading-tight mb-2">{rpt.title}</p>
+                        <p className="text-xs text-slate-400 font-medium mb-6 line-clamp-2 leading-relaxed">{rpt.description}</p>
+                        <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all uppercase tracking-wider">
+                          <Download size={14} /> Download
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : !activeSlotId ? (
