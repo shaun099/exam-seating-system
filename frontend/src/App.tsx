@@ -93,10 +93,21 @@ function App() {
       case "exam-session":
         return (
           <SessionDetails
-            onSubmit={(data) => console.log(data)}
+            config={{
+              rows: 6,
+              columns: 5,
+              maxCapacity: 30,
+              interleaving: true,
+            }}
+            onSubmit={(data) => {
+              console.log("Session data:", data)
+              // Next page integration will come later
+            }}
             onCancel={() => setCurrentPage("dashboard")}
+            onChangeConfig={() => setCurrentPage("configurations")}
           />
         );
+
 
 
       // case "email":
