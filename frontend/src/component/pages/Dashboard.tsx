@@ -35,6 +35,23 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          onClick={() => onNavigate("exam-session")}
+        >
+        <CardContent className="p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-blue-500 flex items-center justify-center">
+            <CalendarDays className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold">New Exam Session</h3>
+            <p className="text-sm text-muted-foreground">
+              Create and configure examination sessions
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+        <Card
+          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
           onClick={() => onNavigate("room-config")}
         >
           <CardContent className="p-6 flex items-center gap-4">
