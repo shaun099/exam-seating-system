@@ -21,7 +21,6 @@ import {
   ClipboardList,
   Users,
   CheckCircle2,
-  Clock,
 } from "lucide-react"
 
 const pastSessions = [

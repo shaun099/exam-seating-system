@@ -20,7 +20,6 @@ import {
   Clock,
   Upload,
   Play,
-  Users,
   FileText,
 } from "lucide-react"
 
@@ -71,7 +70,7 @@ export function SeatingAllocation() {
   const [invigilatorOption, setInvigilatorOption] = useState("default")
   const [progress, setProgress] = useState(0)
   const [progressLogs, setProgressLogs] = useState<string[]>([])
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
+  const [, setSelectedSlot] = useState<string | null>(null)
 
   const handleSlotClick = (slotId: string, status: string) => {
     if (status === "completed") return
@@ -240,7 +239,7 @@ export function SeatingAllocation() {
 
       {/* Allocation Progress Modal */}
       <Dialog open={activeModal === "progress"} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-lg" hideClose>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {progress === 100 ? "Allocation Complete!" : "Allocating Students..."}

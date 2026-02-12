@@ -132,6 +132,10 @@ function App() {
       onNavigate={handleNavigate}
       onLogout={handleLogout}
     >
+      <Home />
+      <LoginForm onLogin={function (): void {
+        throw new Error("Function not implemented.")
+      } } />
       {renderPage()}
     </DashboardLayout>
   );
