@@ -9,6 +9,7 @@ import {
   FileText,
   Mail,
   CalendarDays,
+  Users,
 } from "lucide-react"
 
 interface DashboardHomeProps {
@@ -68,7 +69,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
-          onClick={() => onNavigate("config")}
+          onClick={() => onNavigate("configarations")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
@@ -102,7 +103,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
-          onClick={() => onNavigate("notifications")}
+          onClick={() => onNavigate("email")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center">
@@ -112,6 +113,23 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
               <h3 className="font-semibold text-foreground">Email Notifications</h3>
               <p className="text-sm text-muted-foreground">
                 Send seating & duty alerts
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          onClick={() => onNavigate("invigilator")}
+        >
+          <CardContent className="p-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <Users className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Invigilator Management</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage faculty duty assignments
               </p>
             </div>
           </CardContent>
