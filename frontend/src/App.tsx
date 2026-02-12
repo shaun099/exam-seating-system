@@ -7,7 +7,7 @@ import { Configurations } from "./component/pages/configuration";
 import Reports from "./component/pages/Report";
 
 import Dashboard from "./component/pages/Dashboard";
-
+import ExamSession from "./component/pages/ExamSession";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -63,15 +63,10 @@ function App() {
     switch (currentPage) {
       case "dashboard":
        return <Dashboard onNavigate={handleNavigate} />;
-      // case "new-session":
-      //   return (
-      //     <SessionWizard
-      //       onComplete={handleSessionComplete}
-      //       onCancel={handleSessionCancel}
-      //     />
-      //   );
-      // case "room-config":
-      //   return <RoomConfig />;
+      
+      case "new-session":
+        return <ExamSession />;
+
       case "seating":
         return <SeatingAllocation />;
       // case "invigilator":
