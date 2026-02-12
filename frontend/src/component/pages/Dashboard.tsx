@@ -9,6 +9,7 @@ import {
   FileText,
   Mail,
   CalendarDays,
+  Users,
 } from "lucide-react"
 
 interface DashboardHomeProps {
@@ -33,7 +34,24 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          onClick={() => onNavigate("exam-session")}
+        >
+        <CardContent className="p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-lg bg-blue-500 flex items-center justify-center">
+            <CalendarDays className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold">New Exam Session</h3>
+            <p className="text-sm text-muted-foreground">
+              Create and configure examination sessions
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+        <Card
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("room-config")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -50,7 +68,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("seating")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -67,8 +85,8 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
-          onClick={() => onNavigate("config")}
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          onClick={() => onNavigate("configurations")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
@@ -84,7 +102,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("reports")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -101,8 +119,8 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
-          onClick={() => onNavigate("notifications")}
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          onClick={() => onNavigate("email")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center">
@@ -112,6 +130,24 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
               <h3 className="font-semibold text-foreground">Email Notifications</h3>
               <p className="text-sm text-muted-foreground">
                 Send seating & duty alerts
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+        className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+
+          onClick={() => onNavigate("invigilator")}
+        >
+          <CardContent className="p-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <Users className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Invigilator Management</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage faculty duty assignments
               </p>
             </div>
           </CardContent>
