@@ -34,7 +34,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("exam-session")}
         >
         <CardContent className="p-6 flex items-center gap-4">
@@ -49,9 +49,9 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
           </div>
         </CardContent>
       </Card>
-      
+
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("room-config")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -68,7 +68,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("seating")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -85,7 +85,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("configurations")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -102,7 +102,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("reports")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -119,7 +119,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
           onClick={() => onNavigate("email")}
         >
           <CardContent className="p-6 flex items-center gap-4">
@@ -136,7 +136,8 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary"
+        className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+
           onClick={() => onNavigate("invigilator")}
         >
           <CardContent className="p-6 flex items-center gap-4">
