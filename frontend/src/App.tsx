@@ -5,6 +5,7 @@ import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
 
 import Reports from "./component/pages/Report";
+import EmailNotifications from "./component/pages/email-notifications";
 
 import Dashboard from "./component/pages/Dashboard";
 import { SessionDetails } from "./component/pages/ExamSession/SessionDetails";
@@ -108,10 +109,9 @@ function App() {
           />
         );
 
-
-
-      // case "email":
-      //   return <EmailNotifications />;
+      case "email":
+        return <EmailNotifications />;
+        
       default:
         return (
           // <DashboardHome
