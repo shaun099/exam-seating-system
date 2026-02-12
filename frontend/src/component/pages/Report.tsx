@@ -8,8 +8,7 @@ import {
   ChevronRight,
   ArrowLeft,
 } from "lucide-react"
-import { cn } from "@/src/lib/utils"
-
+import { cn } from "@/lib/utils"
 // --- DATA ---
 const semesters = [
   { id: "s1", name: "Semester 1" },
