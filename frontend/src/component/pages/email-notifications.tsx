@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef } from "react"
 import {
     CheckCircle2, Users, Clock, X, ChevronRight, Mail,
     Plus, RotateCcw, Send, Smartphone, CalendarDays,
