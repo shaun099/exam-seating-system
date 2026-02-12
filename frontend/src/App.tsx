@@ -8,27 +8,38 @@ import Reports from "./component/pages/Report";
 import EmailNotifications from "./component/pages/email-notifications";
 
 import Dashboard from "./component/pages/Dashboard";
-
+import { SessionDetails } from "./component/pages/ExamSession/SessionDetails";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
-  "new-session": [{ label: "Home", href: "/" }, { label: "New Exam Session" }],
+
+  "exam-session": [
+    { label: "Home", href: "/" },
+    { label: "New Exam Session" },
+  ],
+
   "room-config": [
     { label: "Home", href: "/" },
     { label: "Room Configuration" },
   ],
+
   seating: [{ label: "Home", href: "/" }, { label: "Seating Allocation" }],
+
   invigilator: [
     { label: "Home", href: "/" },
     { label: "Invigilator Management" },
   ],
+
   configurations: [
     { label: "Home", href: "/" },
     { label: "System Configuration" },
   ],
+
   reports: [{ label: "Home", href: "/" }, { label: "Reports" }],
+
   email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
 };
+
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -64,15 +75,7 @@ function App() {
     switch (currentPage) {
       case "dashboard":
        return <Dashboard onNavigate={handleNavigate} />;
-      // case "new-session":
-      //   return (
-      //     <SessionWizard
-      //       onComplete={handleSessionComplete}
-      //       onCancel={handleSessionCancel}
-      //     />
-      //   );
-      // case "room-config":
-      //   return <RoomConfig />;
+
       case "seating":
         return <SeatingAllocation />;
       // case "invigilator":
@@ -88,8 +91,27 @@ function App() {
       case "reports":
         return <Reports />;
 
+      case "exam-session":
+        return (
+          <SessionDetails
+            config={{
+              rows: 6,
+              columns: 5,
+              maxCapacity: 30,
+              interleaving: true,
+            }}
+            onSubmit={(data) => {
+              console.log("Session data:", data)
+              // Next page integration will come later
+            }}
+            onCancel={() => setCurrentPage("dashboard")}
+            onChangeConfig={() => setCurrentPage("configurations")}
+          />
+        );
+
       case "email":
         return <EmailNotifications />;
+        
       default:
         return (
           // <DashboardHome
