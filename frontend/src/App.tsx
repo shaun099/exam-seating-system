@@ -109,21 +109,16 @@ function App() {
     }
   };
   return (
-
-    <>
-      <Home />
-      <LoginForm onLogin={function (): void {
-        throw new Error("Function not implemented.")
-      } } />
-    </>
-  )
-
     <DashboardLayout
       currentPage={currentPage}
       breadcrumbs={breadcrumbMap[currentPage]}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
     >
+      <Home />
+      <LoginForm onLogin={function (): void {
+        throw new Error("Function not implemented.")
+      } } />
       {renderPage()}
     </DashboardLayout>
   );
