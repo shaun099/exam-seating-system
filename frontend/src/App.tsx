@@ -9,7 +9,7 @@ import Reports from "./component/pages/Report";
 import EmailNotifications from "./component/pages/email-notifications";
 
 import Dashboard from "./component/pages/Dashboard";
-import { SessionDetails } from "./component/pages/ExamSession/SessionDetails";
+import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -93,19 +93,8 @@ function App() {
 
       case "exam-session":
         return (
-          <SessionDetails
-            config={{
-              rows: 6,
-              columns: 5,
-              maxCapacity: 30,
-              interleaving: true,
-            }}
-            onSubmit={(data) => {
-              console.log("Session data:", data)
-              // Next page integration will come later
-            }}
+          <ExamSessionWizard
             onCancel={() => setCurrentPage("dashboard")}
-            onChangeConfig={() => setCurrentPage("configurations")}
           />
         );
 
