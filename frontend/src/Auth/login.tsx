@@ -4,28 +4,44 @@ import { Card, CardFooter, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Mail, Lock, Eye, EyeOff, GraduationCap } from "lucide-react"
+import { Mail, Lock, Eye, EyeOff, GraduationCap, CheckCircle, XCircle } from "lucide-react"
 
 export function LoginForm({ onLogin }: { onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false)
   const [activeTab, setActiveTab] = useState("login")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("adminpass")
+  const [emailValid, setEmailValid] = useState<boolean | null>(null)
+
+  // Email validation pattern
+  const validateEmail = (value: string) => {
+    const pattern = /^[a-zA-Z0-9._-]+@sjcet\.ac\.in$/
+    return pattern.test(value)
+  }
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setEmail(value)
+    
+    if (value.length > 0) {
+      setEmailValid(validateEmail(value))
+    } else {
+      setEmailValid(null)
+    }
+  }
 
   const handleLoginClick = () => {
-  const email = (document.getElementById("email") as HTMLInputElement).value
-  const password = (document.getElementById("password") as HTMLInputElement).value
-
-  if (email === "admin@sjcet.ac.in" && password === "adminpass") {
-    onLogin()
-  } else {
-    alert("Invalid Email or Password")
+    // Check if email matches pattern and password is correct
+    if (validateEmail(email) && password === "adminpass") {
+      onLogin()
+    } else {
+      alert("Invalid Email or Password")
+    }
   }
-}
-
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center relative p-4">
       
-
       {/* Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-90"
@@ -82,11 +98,32 @@ export function LoginForm({ onLogin }: { onLogin: () => void }) {
                     <Input
                       id="email"
                       type="email"
-                        placeholder="abc@sjcet.ac.in"
-                      defaultValue="admin@sjcet.ac.in"
-                      className="pl-10 border-blue-300 focus:border-blue-500"
+                      placeholder="abc@sjcet.ac.in"
+                      value={email}
+                      onChange={handleEmailChange}
+                      className={`pl-10 pr-10 border-2 ${
+                        emailValid === null 
+                          ? 'border-blue-300 focus:border-blue-500' 
+                          : emailValid 
+                          ? 'border-green-500 focus:border-green-600' 
+                          : 'border-red-500 focus:border-red-600'
+                      }`}
                     />
+                    {emailValid !== null && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {emailValid ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-red-500" />
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {emailValid === false && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Email must match pattern: abc@sjcet.ac.in
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -96,8 +133,9 @@ export function LoginForm({ onLogin }: { onLogin: () => void }) {
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
-                      defaultValue="adminpass"
+                      placeholder="Enter password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       className="pl-10 pr-10 border-blue-300 focus:border-blue-500"
                     />
                     <button
@@ -111,9 +149,14 @@ export function LoginForm({ onLogin }: { onLogin: () => void }) {
                 </div>
 
                 
-<Button  className="w-full bg-blue-700 hover:bg-blue-800 text-white" size="lg" onClick={handleLoginClick}>
-  Access Portal
-</Button>
+                <Button  
+                  className="w-full bg-blue-700 hover:bg-blue-800 text-white" 
+                  size="lg" 
+                  onClick={handleLoginClick}
+                  disabled={emailValid !== true}
+                >
+                  Access Portal
+                </Button>
 
               </TabsContent>
 
