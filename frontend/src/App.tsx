@@ -1,16 +1,18 @@
+
 import { useState } from "react";
 
 import { DashboardLayout } from "./component/layout/DashboardLayout";
-import { LoginForm } from "./Auth/login.tsx"
+import { LoginForm } from "./Auth/login"
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
-
 import Reports from "./component/pages/Report";
 import EmailNotifications from "./component/pages/email-notifications";
-
 import Dashboard from "./component/pages/Dashboard";
 import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
-import { RoomConfig } from "./components/pages/room-config.tsx";
+import { RoomConfig } from "./components/pages/room-config";
+import { AdminPortal } from "./adminportal/admin";
+
+type UserType = 'admin' | 'staff' | null;
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -42,53 +44,45 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
 };
 
-
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userType, setUserType] = useState<UserType>(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  
+  const handleLogin = (type: 'admin' | 'staff') => {
+    setUserType(type);
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
+    setUserType(null);
     setCurrentPage("dashboard");
   };
+
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
   };
-  // const handleStartNewSession = () => {
-  //   setCurrentPage("new-session");
-  // };
-  // const handleSessionComplete = () => {
-  //   setCurrentPage("seating");
-  // };
 
-  // const handleSessionCancel = () => {
-  //   setCurrentPage("dashboard");
-  // };
-
-  if (!isLoggedIn) {
+  // Show login if not logged in
+  if (!userType) {
     return <LoginForm onLogin={handleLogin} />
   }
 
+  // Show Admin Portal for admin users
+  if (userType === 'admin') {
+    return <AdminPortal onLogout={handleLogout} />
+  }
+
+  // Staff Portal - render pages based on currentPage
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-       return <Dashboard onNavigate={handleNavigate} />;
+        return <Dashboard onNavigate={handleNavigate} />;
 
       case "seating":
         return <SeatingAllocation />;
-      // case "invigilator":
-      //   return <InvigilatorMgmt />;
 
       case "configurations":
         return <Configurations />;
-      // case "reports":
-      //   return <Reports />;
 
-      // case "configurations":
-      //   return <Configurations />;
       case "reports":
         return <Reports />;
 
@@ -101,17 +95,15 @@ function App() {
 
       case "email":
         return <EmailNotifications />;
-        
+
+      case "room-config":
+        return <RoomConfig />;
+
       default:
-        return (
-          // <DashboardHome
-          //   onStartNewSession={handleStartNewSession}
-          //   onNavigate={handleNavigate}
-          // />
-          <RoomConfig />
-        );
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
+
   return (
     <DashboardLayout
       currentPage={currentPage}
@@ -122,7 +114,6 @@ function App() {
       {renderPage()}
     </DashboardLayout>
   );
-
 }
 
 export default App

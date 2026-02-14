@@ -1,7 +1,9 @@
+
 "use client"
 
 import { useState } from "react"
 
+// Layouts & Components
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { DashboardHome } from "@/components/pages/dashboard-home"
 import { SessionWizard } from "@/components/pages/new-session/session-wizard"
@@ -9,9 +11,15 @@ import { InvigilatorMgmt } from "@/components/pages/invigilator-mgmt"
 import { Configurations } from "@/components/pages/configurations"
 import { SeatingAllocation } from "@/components/pages/seating-allocation"
 import { EmailNotifications } from "@/components/pages/email-notifications"
-import { LoginForm } from "@/Auth/login"
 import { Reports } from "@/components/pages/reporters"
 import { RoomConfig } from "@/components/pages/room-config"
+
+// Your Custom Auth & Portals
+import { LoginForm } from "@/Auth/login" // Adjust path as needed
+import { AdminPortal } from "@/adminportal/admin" // Adjust path as needed
+
+type UserType = 'admin' | 'staff' | null
+
 type Page =
   | "dashboard"
   | "new-session"
@@ -22,27 +30,17 @@ type Page =
   | "reports"
   | "email"
 
-const breadcrumbMap: Record<Page, string[]> = {
-  dashboard: ["Home", "Dashboard"],
-  "new-session": ["Home", "New Exam Session"],
-  "room-config": ["Home", "Room Configuration"],
-  seating: ["Home", "Seating Allocation"],
-  invigilator: ["Home", "Invigilator Management"],
-  configurations: ["Home", "System Configuration"],
-  reports: ["Home", "Reports"],
-  email: ["Home", "Email Notifications"],
-}
-
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userType, setUserType] = useState<UserType>(null)
   const [currentPage, setCurrentPage] = useState<Page>("dashboard")
 
-  const handleLogin = () => {
-    setIsLoggedIn(true)
+  const handleLogin = (type: 'admin' | 'staff') => {
+    setUserType(type)
+    setCurrentPage("dashboard") // Reset to dashboard on login
   }
 
   const handleLogout = () => {
-    setIsLoggedIn(false)
+    setUserType(null)
     setCurrentPage("dashboard")
   }
 
@@ -50,40 +48,24 @@ export default function Home() {
     setCurrentPage(page as Page)
   }
 
-  const handleStartNewSession = () => {
-    setCurrentPage("new-session")
-  }
-
-  const handleSessionComplete = () => {
-    setCurrentPage("seating")
-  }
-
-  const handleSessionCancel = () => {
-    setCurrentPage("dashboard")
-  }
-
-  if (!isLoggedIn) {
+  // --- 1. LOGIN STATE ---
+  if (!userType) {
     return <LoginForm onLogin={handleLogin} />
   }
 
-  const renderPage = () => {
+  // --- 2. ADMIN PORTAL STATE ---
+  if (userType === 'admin') {
+    return <AdminPortal onLogout={handleLogout} />
+  }
+
+  // --- 3. STAFF PORTAL STATE ---
+  // This helps render the specific content inside the Dashboard Layout
+  const renderStaffContent = () => {
     switch (currentPage) {
       case "dashboard":
-        return (
-          <DashboardHome
-            onStartNewSession={handleStartNewSession}
-            onNavigate={handleNavigate
-
-            }
-          />
-        )
+        return <DashboardHome onStartNewSession={() => setCurrentPage("new-session")} onNavigate={handleNavigate} />
       case "new-session":
-        return (
-          <SessionWizard
-            onComplete={handleSessionComplete}
-            onCancel={handleSessionCancel}
-          />
-        )
+        return <SessionWizard onComplete={() => setCurrentPage("seating")} onCancel={() => setCurrentPage("dashboard")} />
       case "room-config":
         return <RoomConfig />
       case "seating":
@@ -97,23 +79,23 @@ export default function Home() {
       case "email":
         return <EmailNotifications />
       default:
-        return (
-          <DashboardHome
-            onStartNewSession={handleStartNewSession}
-            onNavigate={handleNavigate}
-          />
-        )
+        return <DashboardHome onStartNewSession={() => setCurrentPage("new-session")} onNavigate={handleNavigate} />
     }
   }
 
-  return (  
+  return (
     <DashboardLayout
       currentPage={currentPage}
-      breadcrumbs={breadcrumbMap[currentPage]}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
+      breadcrumbs={[]}
     >
-      {renderPage()}
+      {renderStaffContent()}
     </DashboardLayout>
   )
 }
+
+
+
+
+
