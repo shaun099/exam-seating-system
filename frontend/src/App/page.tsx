@@ -5,14 +5,13 @@ import { useState } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { DashboardHome } from "@/components/pages/dashboard-home"
 import { SessionWizard } from "@/components/pages/new-session/session-wizard"
-import { RoomConfig } from "@/components/pages/room-config"
 import { InvigilatorMgmt } from "@/components/pages/invigilator-mgmt"
 import { Configurations } from "@/components/pages/configurations"
 import { SeatingAllocation } from "@/components/pages/seating-allocation"
 import { EmailNotifications } from "@/components/pages/email-notifications"
 import { LoginForm } from "@/Auth/login"
 import { Reports } from "@/components/pages/reporters"
-
+import { RoomConfig } from "@/components/pages/room-config"
 type Page =
   | "dashboard"
   | "new-session"
@@ -73,7 +72,9 @@ export default function Home() {
         return (
           <DashboardHome
             onStartNewSession={handleStartNewSession}
-            onNavigate={handleNavigate}
+            onNavigate={handleNavigate
+
+            }
           />
         )
       case "new-session":
@@ -105,7 +106,7 @@ export default function Home() {
     }
   }
 
-  return (
+  return (  
     <DashboardLayout
       currentPage={currentPage}
       breadcrumbs={breadcrumbMap[currentPage]}

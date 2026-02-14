@@ -10,6 +10,7 @@ import EmailNotifications from "./component/pages/email-notifications";
 
 import Dashboard from "./component/pages/Dashboard";
 import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
+import { RoomConfig } from "./components/pages/room-config.tsx";
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
@@ -107,7 +108,7 @@ function App() {
           //   onStartNewSession={handleStartNewSession}
           //   onNavigate={handleNavigate}
           // />
-          <h1>404</h1>
+          <RoomConfig />
         );
     }
   };
