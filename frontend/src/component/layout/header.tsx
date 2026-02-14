@@ -34,8 +34,8 @@ export function Header({ breadcrumbs }: HeaderProps) {
 
       <div className="flex items-center gap-3">
         <div className="text-right">
-          <p className="text-sm font-medium text-foreground">Admin</p>
-          <p className="text-xs text-muted-foreground">admin@sjcet.ac.in</p>
+          <p className="text-sm font-medium text-foreground">Staff</p>
+          <p className="text-xs text-muted-foreground">staff@sjcet.ac.in</p>
         </div>
         {/* <Avatar className="h-10 w-10 bg-primary">
           <AvatarFallback className="bg-primary text-primary-foreground">
