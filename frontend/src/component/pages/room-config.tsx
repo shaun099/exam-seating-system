@@ -5,8 +5,8 @@ import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+} from "@/component/ui/card";
+import { Button } from "@/component/ui/button";
 import { 
   Pencil,
   Trash2,
@@ -18,7 +18,7 @@ import {
   FileSpreadsheet
   
 } from "lucide-react";
-import { RoomDetails } from "@/App/roomdetails";
+import { RoomDetails } from "./roomdetails";
 
 interface RoomRecord {
   id: string;

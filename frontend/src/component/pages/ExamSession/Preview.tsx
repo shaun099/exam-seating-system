@@ -1,7 +1,7 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/component/ui/card"
+import { Button } from "@/component/ui/button"
 import {
   Table,
   TableBody,
@@ -9,8 +9,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+} from "@/component/ui/table"
+import { Badge } from "@/component/ui/badge"
 import { CheckCircle2, AlertCircle, ArrowLeft, Sparkles } from "lucide-react"
 import type { StudentRow } from "./ExamSessionWizard"
 
