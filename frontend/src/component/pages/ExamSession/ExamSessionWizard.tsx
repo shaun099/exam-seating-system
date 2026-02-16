@@ -78,15 +78,18 @@ export function ExamSessionWizard({
           onBack={() => setStep("details")}
         />
       )}
-
       {step === "preview" && (
-        <DataPreview
-          data={uploadedData}
-          onBack={() => setStep("import")}
-          onGenerate={handleGenerate}
-          onCancel={onCancel}
-        />
-      )}
+      <DataPreview
+        data={uploadedData} // Changed from 'data' to 'uploadedData'
+        onBack={() => setStep("import")} // Changed from 'handleBack'
+        onCancel={onCancel} // Changed from 'handleCancel'
+        onGenerate={() => {
+          handleGenerate();
+          onNavigate("seating"); // ✅ This routes to Seating Allocation
+        }}
+      />
+    )}
     </div>
+    
   )
 }
