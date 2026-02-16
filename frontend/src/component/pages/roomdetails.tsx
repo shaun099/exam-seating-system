@@ -7,10 +7,10 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/component/ui/card";
+import { Button } from "@/component/ui/button";
+import { Input } from "@/component/ui/input";
+import { Label } from "@/component/ui/label";
 import { Save, ArrowLeft, Building2 } from "lucide-react";
 
 export interface RoomDetailsProps {

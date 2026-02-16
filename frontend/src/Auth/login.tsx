@@ -1,9 +1,9 @@
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardFooter, CardHeader } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/component/ui/button"
+import { Card, CardFooter, CardHeader } from "@/component/ui/card"
+import { Input } from "@/component/ui/input"
+import { Label } from "@/component/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/component/ui/tabs"
 import { Mail, Lock, Eye, EyeOff, GraduationCap, CheckCircle, XCircle } from "lucide-react"
 
 export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') => void }) {
