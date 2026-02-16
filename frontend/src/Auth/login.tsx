@@ -188,7 +188,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
           </CardHeader>
           <CardFooter className="flex justify-center border-t pt-4">
             <p className="text-xs text-blue-800 text-center">
-              Authorized Personnel Only - St. Joseph's College
+              Authorized Personnel Only - St. Joseph's College of Engineering and Technology [Autonomous], Palai
             </p>
           </CardFooter>
         </Card>
