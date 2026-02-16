@@ -17,7 +17,14 @@ export interface StudentRow {
   error?: string 
 }
 
-export function ExamSessionWizard({ onCancel }: { onCancel: () => void }) {
+// Updated props interface to include onNavigate
+export function ExamSessionWizard({ 
+  onCancel, 
+  onNavigate 
+}: { 
+  onCancel: () => void;
+  onNavigate: (page: string) => void; 
+}) {
   const [step, setStep] = useState<WizardStep>("details")
   const [batchType, setBatchType] = useState<string>("")
   const [examMode, setExamMode] = useState<string>("")
@@ -54,7 +61,7 @@ export function ExamSessionWizard({ onCancel }: { onCancel: () => void }) {
           }}
           onSubmit={handleDetailsSubmit}
           onCancel={onCancel}
-          onChangeConfig={() => {}}
+          onNavigate={onNavigate} // ✅ Pass the prop here
         />
       )}
 

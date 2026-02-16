@@ -23,14 +23,14 @@ interface SessionDetailsProps {
   }
   onSubmit: (data: { batchType: string; examMode: string }) => void
   onCancel: () => void
-  onChangeConfig: () => void
+  onNavigate: (page: string) => void   // ✅ Add this
 }
 
 export function SessionDetails({
   config,
   onSubmit,
   onCancel,
-  onChangeConfig,
+  onNavigate,
 }: SessionDetailsProps) {
   const [batchType, setBatchType] = useState("")
   const [examMode, setExamMode] = useState("")
@@ -121,7 +121,7 @@ export function SessionDetails({
           <Button
             variant="link"
             className="p-0 h-auto text-primary"
-            onClick={onChangeConfig}
+            onClick={() => onNavigate("configurations")} 
           >
             Change Configurations
           </Button>

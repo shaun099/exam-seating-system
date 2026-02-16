@@ -87,11 +87,12 @@ function App() {
         return <Reports />;
 
       case "exam-session":
-        return (
-          <ExamSessionWizard
-            onCancel={() => setCurrentPage("dashboard")}
-          />
-        );
+      return (
+        <ExamSessionWizard
+          onCancel={() => setCurrentPage("dashboard")}
+          onNavigate={handleNavigate} // <-- Add this
+        />
+      );
 
       case "email":
         return <EmailNotifications />;
