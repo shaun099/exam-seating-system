@@ -17,7 +17,14 @@ export interface StudentRow {
   error?: string 
 }
 
-export function ExamSessionWizard({ onCancel }: { onCancel: () => void }) {
+// Updated props interface to include onNavigate
+export function ExamSessionWizard({ 
+  onCancel, 
+  onNavigate 
+}: { 
+  onCancel: () => void;
+  onNavigate: (page: string) => void; 
+}) {
   const [step, setStep] = useState<WizardStep>("details")
   const [batchType, setBatchType] = useState<string>("")
   const [examMode, setExamMode] = useState<string>("")
@@ -54,7 +61,7 @@ export function ExamSessionWizard({ onCancel }: { onCancel: () => void }) {
           }}
           onSubmit={handleDetailsSubmit}
           onCancel={onCancel}
-          onChangeConfig={() => {}}
+          onNavigate={onNavigate} // ✅ Pass the prop here
         />
       )}
 
@@ -71,15 +78,18 @@ export function ExamSessionWizard({ onCancel }: { onCancel: () => void }) {
           onBack={() => setStep("details")}
         />
       )}
-
       {step === "preview" && (
-        <DataPreview
-          data={uploadedData}
-          onBack={() => setStep("import")}
-          onGenerate={handleGenerate}
-          onCancel={onCancel}
-        />
-      )}
+      <DataPreview
+        data={uploadedData} // Changed from 'data' to 'uploadedData'
+        onBack={() => setStep("import")} // Changed from 'handleBack'
+        onCancel={onCancel} // Changed from 'handleCancel'
+        onGenerate={() => {
+          handleGenerate();
+          onNavigate("seating"); // ✅ This routes to Seating Allocation
+        }}
+      />
+    )}
     </div>
+    
   )
 }

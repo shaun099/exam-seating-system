@@ -1,7 +1,6 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
-
 import {
   LayoutGrid,
   Building2,
@@ -18,7 +17,11 @@ interface DashboardHomeProps {
 
 export default function Dashboard({ onNavigate }: DashboardHomeProps) {
   return (
-    <div className="space-y-8">
+    /**
+     * h-screen: Locks height to viewport
+     * overflow-y-scroll: Forces the RHS scrollbar to be visible/active
+     */
+    <div className="h-screen w-full overflow-y-scroll overflow-x-hidden p-4 md:p-8 space-y-8 bg-background">
       
       {/* Header */}
       <div>
@@ -34,28 +37,28 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("exam-session")}
         >
-        <CardContent className="p-6 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-blue-500 flex items-center justify-center">
-            <CalendarDays className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold">New Exam Session</h3>
-            <p className="text-sm text-muted-foreground">
-              Create and configure examination sessions
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          <CardContent className="p-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
+              <CalendarDays className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold">New Exam Session</h3>
+              <p className="text-sm text-muted-foreground">
+                Create and configure examination sessions
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("room-config")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
               <Building2 className="w-6 h-6 text-blue-600" />
             </div>
             <div>
@@ -68,11 +71,11 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("seating")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
               <LayoutGrid className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
@@ -85,11 +88,11 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("configurations")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
               <Settings className="w-6 h-6 text-amber-600" />
             </div>
             <div>
@@ -102,11 +105,11 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("reports")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-violet-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
               <FileText className="w-6 h-6 text-violet-600" />
             </div>
             <div>
@@ -119,11 +122,11 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("email")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
               <Mail className="w-6 h-6 text-rose-600" />
             </div>
             <div>
@@ -136,12 +139,11 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </Card>
 
         <Card
-        className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50"
-
+          className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
           onClick={() => onNavigate("invigilator")}
         >
           <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
               <Users className="w-6 h-6 text-indigo-600" />
             </div>
             <div>
@@ -155,7 +157,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
       </div>
 
-      {/* Upcoming Examinations Panel (Scrollable & No Routing) */}
+      {/* Upcoming Examinations Panel */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -165,6 +167,7 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
         </CardHeader>
 
         <CardContent>
+          {/* Internal Scroller restored here */}
           <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
             {[
               { name: "S5 University Exam - Slot A", date: "March 12, 2026", venue: "Main Block" },
@@ -189,6 +192,9 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Footer Spacing for better scroll experience */}
+      <div className="h-10" />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/component/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent} from "@/component/ui/card"
 import { Button } from "@/component/ui/button"
 import { Badge } from "@/component/ui/badge"
 import {
@@ -14,24 +14,22 @@ import {
 } from "@/component/ui/table"
 import {
   Users,
-  Building2,
-  Settings,
-  FileText,
-  Shield,
-  UserCog,
-  Database,
-  Activity,
   LogOut,
   GraduationCap,
   CheckCircle,
   XCircle,
   Clock,
   UserCheck,
-  UserX
+  FileBarChart,
+  UserMinus,
+  ArrowLeft
 } from "lucide-react"
 
+// Updated interface to include initialView
 interface AdminPortalProps {
   onLogout: () => void
+  onNavigate: (page: string) => void 
+  initialView?: 'overview' | 'approvals'
 }
 
 interface PendingStaff {
@@ -43,9 +41,14 @@ interface PendingStaff {
   status: 'pending' | 'approved' | 'rejected'
 }
 
-export function AdminPortal({ onLogout }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'approvals'>('overview')
+export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: AdminPortalProps) {
+  const [view, setView] = useState<'overview' | 'approvals'>(initialView)
   
+  // Sync internal view state if App.tsx passes a new initialView prop
+  useEffect(() => {
+    setView(initialView)
+  }, [initialView])
+
   const [pendingStaff, setPendingStaff] = useState<PendingStaff[]>([
     {
       id: "1",
@@ -94,7 +97,6 @@ export function AdminPortal({ onLogout }: AdminPortalProps) {
       setPendingStaff(pendingStaff.map(staff => 
         staff.id === id ? { ...staff, status: 'approved' } : staff
       ))
-      alert("Staff member approved successfully!")
     }
   }
 
@@ -103,395 +105,170 @@ export function AdminPortal({ onLogout }: AdminPortalProps) {
       setPendingStaff(pendingStaff.map(staff => 
         staff.id === id ? { ...staff, status: 'rejected' } : staff
       ))
-      alert("Staff member rejected.")
     }
   }
 
-  const pendingCount = pendingStaff.filter(s => s.status === 'pending').length
+  const handleRemove = (id: string) => {
+    if (confirm("Are you sure you want to remove this staff member from service?")) {
+      setPendingStaff(pendingStaff.filter(staff => staff.id !== id))
+    }
+  }
+
   const approvedCount = pendingStaff.filter(s => s.status === 'approved').length
-  const rejectedCount = pendingStaff.filter(s => s.status === 'rejected').length
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Admin Header */}
       <header className="bg-slate-800 text-white shadow-lg">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">Admin Portal</h1>
-                <p className="text-sm text-slate-300">SJCET Examination Cell</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg">
-                <Shield className="w-5 h-5" />
-                <span className="font-medium">Administrator</span>
-              </div>
-              <Button
-                onClick={onLogout}
-                variant="outline"
-                className="bg-transparent border-white text-white hover:bg-white hover:text-slate-800"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation Tabs */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-6">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-6 py-4 font-medium border-b-2 transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Activity className="w-4 h-4 inline mr-2" />
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('approvals')}
-              className={`px-6 py-4 font-medium border-b-2 transition-colors relative ${
-                activeTab === 'approvals'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <UserCheck className="w-4 h-4 inline mr-2" />
-              Staff Approvals
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
+  <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+    <div className="flex items-center gap-4">
+      <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+        <GraduationCap className="w-7 h-7 text-white" />
       </div>
+      <div>
+        <h1 className="text-2xl font-bold">Administrator</h1>
+        <p className="text-sm text-slate-300 italic">SJCET Examination Cell</p>
+      </div>
+    </div>
+    
+    {/* Ensure this button has no 'opacity-0' or 'invisible' classes */}
+    <div className="flex items-center gap-4">
+          <Button 
+      onClick={onLogout} 
+      className="bg-red-600 text-black shadow-sm hover:bg-red-800 transition-colors"
+    >
+      <LogOut className="w-4 h-4 mr-2" />
+      Logout
+    </Button>
+    </div>
+  </div>
+</header>
 
-      {/* Main Content */}
       <div className="container mx-auto px-6 py-8">
-        {activeTab === 'overview' && (
-          <>
+        {view === 'overview' && (
+          <div className="max-w-4xl mx-auto space-y-6">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Welcome, Administrator
-              </h2>
-              <p className="text-gray-600 mt-1">
-                Manage system settings and user permissions
-              </p>
+              <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+              <p className="text-gray-600 mt-1">Select an action to manage the examination system</p>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <Card className="border border-gray-200 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Total Staff</p>
-                      <p className="text-3xl font-bold text-gray-900">{pendingStaff.length}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Users className="w-6 h-6 text-blue-600" />
-                    </div>
+            {/* Compact Summary Card */}
+            <Card className="border border-blue-100 bg-blue-50/50 mb-6">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-blue-700 font-bold uppercase tracking-tight text-[10px]">
+                      Total Faculty Working
+                    </p>
+                    <p className="text-3xl font-black text-blue-900 leading-none">
+                      {approvedCount}
+                    </p>
                   </div>
+                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                    <Users className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card 
+                className="cursor-pointer hover:border-blue-500 transition-all shadow-sm group"
+                onClick={() => setView('approvals')}
+              >
+                <CardContent className="p-8 flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <UserCheck className="w-8 h-8 text-orange-600" />
+                  </div>
+                  <h3 className="text-xl font-bold">Staff Approvals</h3>
+                  <p className="text-gray-600 mt-2 text-sm">Review pending portal access requests</p>
                 </CardContent>
               </Card>
 
-              <Card className="border border-gray-200 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Pending Approvals</p>
-                      <p className="text-3xl font-bold text-orange-600">{pendingCount}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-orange-600" />
-                    </div>
+              <Card 
+                className="cursor-pointer hover:border-green-500 transition-all shadow-sm group"
+                onClick={() => onNavigate('reports')}
+              >
+                <CardContent className="p-8 flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <FileBarChart className="w-8 h-8 text-green-600" />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Approved Staff</p>
-                      <p className="text-3xl font-bold text-green-600">{approvedCount}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <UserCheck className="w-6 h-6 text-green-600" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Rejected</p>
-                      <p className="text-3xl font-bold text-red-600">{rejectedCount}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                      <UserX className="w-6 h-6 text-red-600" />
-                    </div>
-                  </div>
+                  <h3 className="text-xl font-bold">System Reports</h3>
+                  <p className="text-gray-600 mt-2 text-sm">View consolidated and room-wise reports</p>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Admin Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <UserCog className="w-7 h-7 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">User Management</h3>
-                      <p className="text-sm text-gray-600">Manage staff accounts and permissions</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Settings className="w-7 h-7 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">System Settings</h3>
-                      <p className="text-sm text-gray-600">Configure system parameters</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-7 h-7 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">Room Management</h3>
-                      <p className="text-sm text-gray-600">Configure examination rooms</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <FileText className="w-7 h-7 text-orange-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">Audit Logs</h3>
-                      <p className="text-sm text-gray-600">View system activity logs</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-red-100 rounded-lg flex items-center justify-center">
-                      <Database className="w-7 h-7 text-red-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">Database Backup</h3>
-                      <p className="text-sm text-gray-600">Manage data backups</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-gray-200 shadow-sm hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-indigo-100 rounded-lg flex items-center justify-center">
-                      <Shield className="w-7 h-7 text-indigo-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">Security Settings</h3>
-                      <p className="text-sm text-gray-600">Configure security policies</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </>
+          </div>
         )}
-
-        {activeTab === 'approvals' && (
-          <>
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Staff Approval Requests
-              </h2>
-              <p className="text-gray-600 mt-1">
-                Review and approve staff access to the Examination Cell Portal
-              </p>
+        
+        {view === 'approvals' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" onClick={() => setView('overview')} className="text-gray-600">
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back
+              </Button>
+              <h2 className="text-2xl font-bold text-gray-900">Staff Access Requests</h2>
             </div>
 
-            {/* Approval Statistics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <Card className="border border-orange-200 bg-orange-50">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <Clock className="w-10 h-10 text-orange-600" />
-                    <div>
-                      <p className="text-sm text-orange-700 font-medium">Pending Requests</p>
-                      <p className="text-3xl font-bold text-orange-900">{pendingCount}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-green-200 bg-green-50">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <CheckCircle className="w-10 h-10 text-green-600" />
-                    <div>
-                      <p className="text-sm text-green-700 font-medium">Approved</p>
-                      <p className="text-3xl font-bold text-green-900">{approvedCount}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border border-red-200 bg-red-50">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <XCircle className="w-10 h-10 text-red-600" />
-                    <div>
-                      <p className="text-sm text-red-700 font-medium">Rejected</p>
-                      <p className="text-3xl font-bold text-red-900">{rejectedCount}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Pending Approvals Table */}
-            <Card className="border border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50">
-                <CardTitle className="text-lg">Staff Access Requests</CardTitle>
-              </CardHeader>
+            <Card className="border border-gray-200 shadow-sm overflow-hidden">
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
                   <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
+                    <TableHeader className="sticky top-0 bg-gray-50 z-10">
+                      <TableRow>
                         <TableHead className="font-semibold">Staff Name</TableHead>
                         <TableHead className="font-semibold">Email</TableHead>
                         <TableHead className="font-semibold">Department</TableHead>
-                        <TableHead className="font-semibold">Requested At</TableHead>
                         <TableHead className="font-semibold text-center">Status</TableHead>
                         <TableHead className="font-semibold text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pendingStaff.map((staff) => (
-                        <TableRow key={staff.id} className="hover:bg-gray-50">
-                          <TableCell className="font-medium text-gray-900">
+                        <TableRow key={staff.id} className="hover:bg-gray-50 transition-colors">
+                          <TableCell className="font-medium text-gray-900 py-4">
                             {staff.name}
+                            <p className="text-[10px] text-gray-400 font-normal">{staff.requestedAt}</p>
                           </TableCell>
-                          <TableCell className="text-gray-700">
-                            {staff.email}
-                          </TableCell>
-                          <TableCell className="text-gray-700">
-                            {staff.department}
-                          </TableCell>
-                          <TableCell className="text-gray-600 text-sm">
-                            {staff.requestedAt}
-                          </TableCell>
+                          <TableCell className="text-gray-700 text-sm">{staff.email}</TableCell>
+                          <TableCell className="text-gray-700 text-sm">{staff.department}</TableCell>
                           <TableCell className="text-center">
-                            {staff.status === 'pending' && (
-                              <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">
-                                <Clock className="w-3 h-3 mr-1" />
-                                Pending
-                              </Badge>
-                            )}
-                            {staff.status === 'approved' && (
-                              <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Approved
-                              </Badge>
-                            )}
-                            {staff.status === 'rejected' && (
-                              <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
-                                <XCircle className="w-3 h-3 mr-1" />
-                                Rejected
-                              </Badge>
-                            )}
+                            <Badge className={`shadow-none border-none ${
+                              staff.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                              staff.status === 'approved' ? 'bg-green-100 text-green-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {staff.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
+                              {staff.status === 'approved' && <CheckCircle className="w-3 h-3 mr-1" />}
+                              {staff.status === 'rejected' && <XCircle className="w-3 h-3 mr-1" />}
+                              {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
+                            </Badge>
                           </TableCell>
                           <TableCell>
-                            {staff.status === 'pending' && (
-                              <div className="flex items-center justify-center gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleApprove(staff.id)}
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-1" />
-                                  Approve
+                            <div className="flex items-center justify-center gap-2">
+                              {staff.status === 'pending' && (
+                                <>
+                                  <Button size="sm" onClick={() => handleApprove(staff.id)} className="bg-green-600 hover:bg-green-700 h-8">Approve</Button>
+                                  <Button size="sm" variant="outline" onClick={() => handleReject(staff.id)} className="border-red-600 text-red-600 h-8">Reject</Button>
+                                </>
+                              )}
+                              {staff.status === 'approved' && (
+                                <Button size="sm" variant="destructive" onClick={() => handleRemove(staff.id)} className="h-8 bg-red-600">
+                                  <UserMinus className="w-4 h-4 mr-1" /> Remove
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleReject(staff.id)}
-                                  className="border-red-600 text-red-600 hover:bg-red-50"
-                                >
-                                  <XCircle className="w-4 h-4 mr-1" />
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                            {staff.status !== 'pending' && (
-                              <div className="text-center text-sm text-gray-500">
-                                No actions
-                              </div>
-                            )}
+                              )}
+                              {staff.status === 'rejected' && <span className="text-xs text-gray-400 italic">Access Denied</span>}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-
-                {pendingStaff.length === 0 && (
-                  <div className="text-center py-12">
-                    <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-900 font-medium">No staff requests</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Staff approval requests will appear here
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </Card>
-          </>
+          </div>
         )}
       </div>
     </div>
   )
 }
-

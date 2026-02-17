@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import { DashboardLayout } from "./component/layout/DashboardLayout";
@@ -47,7 +46,7 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
 function App() {
   const [userType, setUserType] = useState<UserType>(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
-  
+ 
   const handleLogin = (type: 'admin' | 'staff') => {
     setUserType(type);
   };
@@ -68,9 +67,9 @@ function App() {
 
   // Show Admin Portal for admin users
   if (userType === 'admin') {
-    return <AdminPortal onLogout={handleLogout} />
+  return <AdminPortal onLogout={handleLogout} onNavigate={handleNavigate} />
   }
-
+  
   // Staff Portal - render pages based on currentPage
   const renderPage = () => {
     switch (currentPage) {
@@ -87,11 +86,12 @@ function App() {
         return <Reports />;
 
       case "exam-session":
-        return (
-          <ExamSessionWizard
-            onCancel={() => setCurrentPage("dashboard")}
-          />
-        );
+      return (
+        <ExamSessionWizard
+          onCancel={() => setCurrentPage("dashboard")}
+          onNavigate={handleNavigate} // <-- Add this
+        />
+      );
 
       case "email":
         return <EmailNotifications />;

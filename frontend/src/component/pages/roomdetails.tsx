@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -11,14 +11,19 @@ import {
 import { Button } from "@/component/ui/button";
 import { Input } from "@/component/ui/input";
 import { Label } from "@/component/ui/label";
-import { Save, ArrowLeft, Building2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/component/ui/tabs";
+import { Save, ArrowLeft, Building2, Grid3X3, Users } from "lucide-react";
 
 export interface RoomDetailsProps {
   hallId: string;
   hallName: string;
   capacity: number;
   building: string;
-  onSave: (updatedHall: { id: string; hallName: string; capacity: number; building: string }) => void;
+  // Existing internal profile data if available
+  initialRows?: number;
+  initialCols?: number;
+  initialRowConfigs?: number[];
+  onSave: (updatedProfile: any) => void;
   onBack: () => void;
 }
 
@@ -27,238 +32,210 @@ export function RoomDetails({
   hallName, 
   capacity, 
   building, 
+  initialRows = 6,
+  initialCols = 5,
+  initialRowConfigs,
   onSave, 
   onBack 
 }: RoomDetailsProps) {
+  const [activeTab, setActiveTab] = useState("internal");
   const [editedHall, setEditedHall] = useState({
     id: hallId,
     hallName: hallName,
-    capacity: capacity,
     building: building,
+    universityCapacity: 30,
+    rows: initialRows,
+    cols: initialCols,
+    rowConfigs: initialRowConfigs || Array(initialRows).fill(initialCols),
+    totalInternalCapacity: capacity,
   });
 
+  useEffect(() => {
+    const total = editedHall.rowConfigs.reduce((a, b) => a + b, 0);
+    setEditedHall(prev => ({ ...prev, totalInternalCapacity: total }));
+  }, [editedHall.rowConfigs]);
+
+  const handleRowChange = (count: string) => {
+    const newRowCount = Math.max(1, parseInt(count) || 1);
+    const newConfigs = Array(newRowCount).fill(editedHall.cols);
+    editedHall.rowConfigs.forEach((val, idx) => {
+      if (idx < newRowCount) newConfigs[idx] = val;
+    });
+    setEditedHall({ ...editedHall, rows: newRowCount, rowConfigs: newConfigs });
+  };
+
+  const updateSingleRow = (index: number, val: string) => {
+    const updated = [...editedHall.rowConfigs];
+    updated[index] = parseInt(val) || 0;
+    setEditedHall({ ...editedHall, rowConfigs: updated });
+  };
+
   const handleSave = () => {
-    onSave(editedHall);
-    alert("Room details saved successfully!");
+    onSave({
+      id: editedHall.id,
+      hallName: editedHall.hallName,
+      building: editedHall.building,
+      universityMode: { rows: 6, cols: 5, capacity: 30 },
+      internalProfile: {
+        rows: editedHall.rows,
+        cols: editedHall.cols,
+        rowConfigs: editedHall.rowConfigs,
+        capacity: editedHall.totalInternalCapacity
+      }
+    });
+    alert(`Profile for ${editedHall.hallName} updated!`);
   };
 
   return (
-    <div className="min-h-screen max-h-screen overflow-y-auto bg-gray-50">
-      <div className="space-y-6 p-6">
-      {/* Header with Back Button */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
-          onClick={onBack}
-          className="bg-white text-blue-600 border-blue-600 hover:bg-blue-50"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-blue-900">Room Details</h1>
-          <p className="text-blue-700 mt-1">{hallName}</p>
+    <div className="h-screen bg-gray-50 overflow-y-auto custom-scrollbar">
+      {/* Added pb-40 to ensure the page can scroll down past the sticky footer */}
+      <div className="max-w-4xl mx-auto space-y-6 p-6 pb-40">
+        {/* Header */}
+        <div className="flex items-center justify-between sticky top-0 bg-gray-50/80 backdrop-blur-sm z-10 py-2">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={onBack} className="border-blue-600 text-blue-600 bg-white">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-blue-900">Room Profile</h1>
+              <p className="text-blue-600 text-sm">{editedHall.hallName} • {editedHall.building}</p>
+            </div>
+          </div>
+          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 shadow-md">
+            <Save className="w-4 h-4 mr-2" /> Save Profile
+          </Button>
         </div>
-        <Button
-          onClick={handleSave}
-          className="bg-blue-600 text-white hover:bg-blue-700"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Save Changes
-        </Button>
-      </div>
 
-      {/* Room Details Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border-blue-200 shadow-lg lg:col-span-2">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg flex items-center gap-2 text-blue-900">
-              <Building2 className="w-5 h-5 text-blue-600" />
-              Edit Room Information
-            </CardTitle>
-            <CardDescription className="text-blue-700">
-              Update the details for this examination hall
-            </CardDescription>
+        <Card className="border-blue-200 shadow-lg">
+          <CardHeader className="bg-blue-50 border-b border-blue-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="space-y-1">
+                <CardTitle className="text-blue-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                  Configuration Profiles
+                </CardTitle>
+                <CardDescription>Setup room behavior for different exam modes</CardDescription>
+              </div>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:w-[300px]">
+                <TabsList className="grid w-full grid-cols-2 bg-blue-100">
+                  <TabsTrigger value="university">University</TabsTrigger>
+                  <TabsTrigger value="internal">Internal</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Hall Name */}
+
+          <CardContent className="pt-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="hallName" className="text-blue-900 font-medium">
-                  Hall Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="hallName"
-                  value={editedHall.hallName}
-                  onChange={(e) =>
-                    setEditedHall({ ...editedHall, hallName: e.target.value })
-                  }
-                  placeholder="Enter hall name"
-                  className="border-blue-300 focus:border-blue-500"
+                <Label className="text-blue-900 font-semibold">Hall Name</Label>
+                <Input 
+                  value={editedHall.hallName} 
+                  onChange={(e) => setEditedHall({...editedHall, hallName: e.target.value})} 
+                  className="border-blue-200 focus:ring-blue-500"
                 />
               </div>
-
-              {/* Building */}
               <div className="space-y-2">
-                <Label htmlFor="building" className="text-blue-900 font-medium">
-                  Building <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="building"
-                  value={editedHall.building}
-                  onChange={(e) =>
-                    setEditedHall({ ...editedHall, building: e.target.value })
-                  }
-                  placeholder="Enter building name"
-                  className="border-blue-300 focus:border-blue-500"
-                />
-              </div>
-
-              {/* Capacity */}
-              <div className="space-y-2">
-                <Label htmlFor="capacity" className="text-blue-900 font-medium">
-                  Seating Capacity <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={editedHall.capacity}
-                  onChange={(e) =>
-                    setEditedHall({
-                      ...editedHall,
-                      capacity: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  placeholder="Enter capacity"
-                  className="border-blue-300 focus:border-blue-500"
-                />
-              </div>
-
-              {/* Room ID (Read-only) */}
-              <div className="space-y-2">
-                <Label htmlFor="roomId" className="text-blue-900 font-medium">
-                  Room ID
-                </Label>
-                <Input
-                  id="roomId"
-                  value={hallId}
-                  disabled
-                  className="border-blue-300 bg-blue-50 text-blue-700"
+                <Label className="text-blue-900 font-semibold">Building</Label>
+                <Input 
+                  value={editedHall.building} 
+                  onChange={(e) => setEditedHall({...editedHall, building: e.target.value})} 
+                  className="border-blue-200 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Summary Card */}
-            <div className="mt-6 bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
-              <h3 className="text-sm font-semibold text-blue-900 mb-3">
-                Room Summary
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-blue-700 font-medium">Hall Name</p>
-                  <p className="text-lg font-bold text-blue-900 mt-1">
-                    {editedHall.hallName || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 font-medium">Building</p>
-                  <p className="text-lg font-bold text-blue-900 mt-1">
-                    {editedHall.building || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 font-medium">
-                    Total Capacity
-                  </p>
-                  <p className="text-lg font-bold text-green-900 mt-1">
-                    {editedHall.capacity} seats
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <hr className="border-blue-100" />
 
-        {/* Additional Information Card */}
-        <Card className="border-blue-200 shadow-lg">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg text-blue-900">
-              Room Guidelines
-            </CardTitle>
-            <CardDescription className="text-blue-700">
-              Important information about room configuration
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <ul className="space-y-3 text-sm text-blue-800">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">•</span>
-                <span>
-                  Ensure the hall name is unique and easily identifiable
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">•</span>
-                <span>
-                  Capacity should reflect actual seating with proper spacing
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">•</span>
-                <span>
-                  Building name helps in organizing examination schedules
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">•</span>
-                <span>
-                  All fields marked with <span className="text-red-500">*</span>{" "}
-                  are required
-                </span>
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+            {activeTab === "university" ? (
+              <div className="bg-blue-50/50 p-6 rounded-xl border border-dashed border-blue-300">
+                <div className="flex items-center gap-3 mb-4">
+                  <Users className="text-blue-600" />
+                  <h3 className="font-bold text-blue-900">Standard University Profile</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm text-center">
+                    <p className="text-[10px] uppercase font-bold text-blue-400 mb-1">Rows</p>
+                    <p className="text-xl font-bold text-blue-900">6</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm text-center">
+                    <p className="text-[10px] uppercase font-bold text-blue-400 mb-1">Cols</p>
+                    <p className="text-xl font-bold text-blue-900">5</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm text-center">
+                    <p className="text-[10px] uppercase font-bold text-blue-400 mb-1">Capacity</p>
+                    <p className="text-xl font-bold text-emerald-600">30</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Grid3X3 className="text-blue-600" />
+                  <h3 className="font-bold text-blue-900">Internal Exam Capacity</h3>
+                </div>
 
-        {/* Statistics Card */}
-        <Card className="border-blue-200 shadow-lg">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg text-blue-900">
-              Quick Stats
-            </CardTitle>
-            <CardDescription className="text-blue-700">
-              Current room statistics
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <p className="text-xs text-blue-700 font-medium">Status</p>
-                <p className="text-xl font-bold text-green-600 mt-1">Active</p>
+                <div className="grid grid-cols-2 gap-4 max-w-sm">
+                  <div className="space-y-2">
+                    <Label className="font-semibold">Number of Rows</Label>
+                    <Input 
+                      type="number" 
+                      value={editedHall.rows} 
+                      onChange={(e) => handleRowChange(e.target.value)} 
+                      className="border-blue-200"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-semibold">Columns per Row</Label>
+                    <Input 
+                      type="number" 
+                      value={editedHall.cols} 
+                      onChange={(e) => setEditedHall({...editedHall, cols: parseInt(e.target.value) || 0})} 
+                      className="border-blue-200"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
+                  <Label className="text-blue-900 block mb-4 font-bold italic">
+                    Fine-tune Capacity (Seats per Row)
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {editedHall.rowConfigs.map((cap, idx) => (
+                      <div key={idx} className="flex items-center gap-3 bg-white p-2 rounded-md border border-blue-100 shadow-sm">
+                        <span className="text-xs font-bold text-blue-500 w-10">R-{idx + 1}</span>
+                        <Input 
+                          type="number" 
+                          value={cap} 
+                          className="h-8 w-16 border-none bg-blue-50/50 text-center font-bold"
+                          onChange={(e) => updateSingleRow(idx, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                <p className="text-xs text-green-700 font-medium">
-                  Seating Capacity
-                </p>
-                <p className="text-3xl font-bold text-green-900 mt-1">
-                  {editedHall.capacity}
+            )}
+
+            {/* Sticky Summary Bar */}
+            <div className="sticky bottom-0 mt-6 flex items-center justify-between p-5 bg-gradient-to-r from-blue-900 to-blue-800 rounded-xl text-white shadow-xl">
+              <div>
+                <p className="text-blue-300 text-[10px] uppercase font-bold tracking-widest">Calculated Seating</p>
+                <p className="text-3xl font-black">
+                  {activeTab === "university" ? editedHall.universityCapacity : editedHall.totalInternalCapacity} 
+                  <span className="text-sm font-normal ml-2 text-blue-200">Students</span>
                 </p>
               </div>
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <p className="text-xs text-blue-700 font-medium">
-                  Last Modified
-                </p>
-                <p className="text-sm font-medium text-blue-900 mt-1">
-                  {new Date().toLocaleDateString()}
+              <div className="text-right border-l border-blue-700 pl-6">
+                <p className="text-blue-300 text-[10px] uppercase font-bold">Active Layout</p>
+                <p className="font-bold text-lg">
+                  {activeTab === "university" ? "6 × 5 Standard" : `${editedHall.rows} Custom Rows`}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
     </div>
   );
 }

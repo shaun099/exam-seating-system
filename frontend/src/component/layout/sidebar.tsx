@@ -21,7 +21,7 @@ interface SidebarProps {
 
 const navItems = [
   { id: "dashboard", label: "Home", icon: Home },
-  { id: "room-config", label: "Room Config", icon: Building2 },
+  { id: "room-config", label: "Room Configuration", icon: Building2 },
   { id: "seating", label: "Seating Allocation", icon: LayoutGrid },
   { id: "invigilator", label: "Invigilator Mgmt", icon: Users },
   { id: "configurations", label: "Configurations", icon: Settings },
