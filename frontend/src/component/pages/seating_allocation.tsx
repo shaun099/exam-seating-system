@@ -136,22 +136,20 @@ export function SeatingAllocation({ onNavigate }: SeatingAllocationProps) {
           currentLog++;
         } else {
           clearInterval(interval);
-          setTimeout(() => {
-            // Mark the selected slot as completed
-            const slotId = selectedSlotRef.current;
-            if (slotId) {
-              setSemesterData((prev) =>
-                prev.map((semester) => ({
-                  ...semester,
-                  slots: semester.slots.map((slot) =>
-                    slot.id === slotId
-                      ? { ...slot, status: "completed" as const }
-                      : slot,
-                  ),
-                })),
-              );
-            }
-          }, 1000);
+          // Mark the selected slot as completed immediately
+          const slotId = selectedSlotRef.current;
+          if (slotId) {
+            setSemesterData((prev) =>
+              prev.map((semester) => ({
+                ...semester,
+                slots: semester.slots.map((slot) =>
+                  slot.id === slotId
+                    ? { ...slot, status: "completed" as const }
+                    : slot,
+                ),
+              })),
+            );
+          }
         }
       }, 500);
 
