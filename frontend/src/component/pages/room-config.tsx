@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef } from "react";
@@ -280,7 +279,8 @@ export function RoomConfig() {
   }
 
   return (
-    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+    <div className="bg-gray-50 overflow-y-auto custom-scrollbar">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -495,6 +495,6 @@ export function RoomConfig() {
         </div>
       )}
     </div>
+   </div>
   );
 }
-
