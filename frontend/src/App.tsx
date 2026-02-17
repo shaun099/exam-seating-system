@@ -10,6 +10,7 @@ import Dashboard from "./component/pages/Dashboard";
 import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
 import { RoomConfig } from "./component/pages/room-config";
 import { AdminPortal } from "./adminportal/admin";
+import AdminReports from "./adminportal/adminreports";
 
 type UserType = "admin" | "staff" | null;
 
@@ -63,9 +64,24 @@ function App() {
   }
 
   // Show Admin Portal for admin users
-  if (userType === 'admin') {
-  return <AdminPortal onLogout={handleLogout} onNavigate={handleNavigate} />
+ if (userType === "admin") {
+  if (currentPage === "admin-reports") {
+    return (
+      <AdminReports
+        onLogout={handleLogout}
+        onNavigate={handleNavigate}
+      />
+    );
   }
+
+  // Default admin view
+  return (
+    <AdminPortal
+      onLogout={handleLogout}
+      onNavigate={handleNavigate}
+    />
+  );
+}
   
   // Staff Portal - render pages based on currentPage
   const renderPage = () => {
