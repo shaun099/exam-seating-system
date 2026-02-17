@@ -38,8 +38,8 @@ export function Sidebar({ currentPage, onNavigate, onLogout }: SidebarProps) {
             <GraduationCap className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-lg text-white">Exam Cell</h2>
-            <p className="text-xs text-slate-300">SJCET Portal</p>
+            <h2 className="font-bold text-lg text-white">Examination Cell</h2>
+            <p className="text-xs text-slate-300">SJCET Staff Portal</p>
           </div>
         </div>
       </div>
