@@ -5,9 +5,14 @@ import { ChevronRight } from "lucide-react";
 
 interface HeaderProps {
   breadcrumbs: { label: string; href?: string }[];
+  onNavigate?: (page: string) => void;
 }
 
-export function Header({ breadcrumbs }: HeaderProps) {
+const hrefToPage: Record<string, string> = {
+  "/": "dashboard",
+};
+
+export function Header({ breadcrumbs, onNavigate }: HeaderProps) {
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
       <nav className="flex items-center gap-2 text-sm">
@@ -19,15 +24,26 @@ export function Header({ breadcrumbs }: HeaderProps) {
             {index > 0 && (
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             )}
-            <span
-              className={
-                index === breadcrumbs.length - 1
-                  ? "font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground cursor-pointer"
-              }
-            >
-              {crumb.label}
-            </span>
+            {crumb.href && index !== breadcrumbs.length - 1 ? (
+              <button
+                onClick={() =>
+                  onNavigate?.(hrefToPage[crumb.href!] ?? crumb.href!)
+                }
+                className="text-muted-foreground hover:text-foreground cursor-pointer hover:underline"
+              >
+                {crumb.label}
+              </button>
+            ) : (
+              <span
+                className={
+                  index === breadcrumbs.length - 1
+                    ? "font-medium text-foreground"
+                    : "text-muted-foreground"
+                }
+              >
+                {crumb.label}
+              </span>
+            )}
           </span>
         ))}
       </nav>

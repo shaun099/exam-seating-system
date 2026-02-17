@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { DashboardLayout } from "./component/layout/DashboardLayout";
-import { LoginForm } from "./Auth/login"
+import { LoginForm } from "./Auth/login";
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
 import Reports from "./component/pages/Report";
@@ -11,15 +11,12 @@ import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWiza
 import { RoomConfig } from "./component/pages/room-config";
 import { AdminPortal } from "./adminportal/admin";
 
-type UserType = 'admin' | 'staff' | null;
+type UserType = "admin" | "staff" | null;
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
 
-  "exam-session": [
-    { label: "Home", href: "/" },
-    { label: "New Exam Session" },
-  ],
+  "exam-session": [{ label: "Home", href: "/" }, { label: "New Exam Session" }],
 
   "room-config": [
     { label: "Home", href: "/" },
@@ -62,7 +59,7 @@ function App() {
 
   // Show login if not logged in
   if (!userType) {
-    return <LoginForm onLogin={handleLogin} />
+    return <LoginForm onLogin={handleLogin} />;
   }
 
   // Show Admin Portal for admin users
@@ -77,7 +74,7 @@ function App() {
         return <Dashboard onNavigate={handleNavigate} />;
 
       case "seating":
-        return <SeatingAllocation />;
+        return <SeatingAllocation onNavigate={handleNavigate} />;
 
       case "configurations":
         return <Configurations />;
@@ -86,12 +83,14 @@ function App() {
         return <Reports />;
 
       case "exam-session":
+
       return (
         <ExamSessionWizard
           onCancel={() => setCurrentPage("dashboard")}
           onNavigate={handleNavigate} // <-- Add this
         />
       );
+
 
       case "email":
         return <EmailNotifications />;
@@ -116,4 +115,4 @@ function App() {
   );
 }
 
-export default App
+export default App;
