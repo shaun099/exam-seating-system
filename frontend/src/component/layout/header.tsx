@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import { User } from "lucide-react";
 // import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 interface HeaderProps {
@@ -48,17 +49,16 @@ export function Header({ breadcrumbs, onNavigate }: HeaderProps) {
         ))}
       </nav>
 
-      <div className="flex items-center gap-3">
-        <div className="text-right">
-          <p className="text-sm font-medium text-foreground">Staff</p>
-          <p className="text-xs text-muted-foreground">staff@sjcet.ac.in</p>
-        </div>
-        {/* <Avatar className="h-10 w-10 bg-primary">
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            <User className="w-5 h-5" />
-          </AvatarFallback>
-        </Avatar> */}
+     <div className="flex items-center gap-3">
+      <div className="text-right">
+        <p className="text-sm font-medium text-foreground">Staff Name</p>
+        <p className="text-xs text-muted-foreground">staff@sjcet.ac.in</p>
       </div>
-    </header>
+
+      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+        <User className="w-5 h-5 text-blue-600" />
+      </div>
+    </div>
+  </header>
   );
 }
