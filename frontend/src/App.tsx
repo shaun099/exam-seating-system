@@ -1,8 +1,7 @@
-
 import { useState } from "react";
 
 import { DashboardLayout } from "./component/layout/DashboardLayout";
-import { LoginForm } from "./Auth/login"
+import { LoginForm } from "./Auth/login";
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
 import Reports from "./component/pages/Report";
@@ -12,15 +11,12 @@ import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWiza
 import { RoomConfig } from "./component/pages/room-config";
 import { AdminPortal } from "./adminportal/admin";
 
-type UserType = 'admin' | 'staff' | null;
+type UserType = "admin" | "staff" | null;
 
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
 
-  "exam-session": [
-    { label: "Home", href: "/" },
-    { label: "New Exam Session" },
-  ],
+  "exam-session": [{ label: "Home", href: "/" }, { label: "New Exam Session" }],
 
   "room-config": [
     { label: "Home", href: "/" },
@@ -47,8 +43,8 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
 function App() {
   const [userType, setUserType] = useState<UserType>(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
-  
-  const handleLogin = (type: 'admin' | 'staff') => {
+
+  const handleLogin = (type: "admin" | "staff") => {
     setUserType(type);
   };
 
@@ -63,12 +59,12 @@ function App() {
 
   // Show login if not logged in
   if (!userType) {
-    return <LoginForm onLogin={handleLogin} />
+    return <LoginForm onLogin={handleLogin} />;
   }
 
   // Show Admin Portal for admin users
-  if (userType === 'admin') {
-    return <AdminPortal onLogout={handleLogout} />
+  if (userType === "admin") {
+    return <AdminPortal onLogout={handleLogout} />;
   }
 
   // Staff Portal - render pages based on currentPage
@@ -78,7 +74,7 @@ function App() {
         return <Dashboard onNavigate={handleNavigate} />;
 
       case "seating":
-        return <SeatingAllocation />;
+        return <SeatingAllocation onNavigate={handleNavigate} />;
 
       case "configurations":
         return <Configurations />;
@@ -88,9 +84,7 @@ function App() {
 
       case "exam-session":
         return (
-          <ExamSessionWizard
-            onCancel={() => setCurrentPage("dashboard")}
-          />
+          <ExamSessionWizard onCancel={() => setCurrentPage("dashboard")} />
         );
 
       case "email":
@@ -116,4 +110,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

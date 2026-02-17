@@ -24,7 +24,7 @@ export function DashboardLayout({
         onLogout={onLogout}
       />
       <div className="ml-64">
-        <Header breadcrumbs={breadcrumbs} />
+        <Header breadcrumbs={breadcrumbs} onNavigate={onNavigate} />
         <main className="p-6">{children}</main>
       </div>
     </div>

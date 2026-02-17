@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -26,7 +26,7 @@ import {
 interface Slot {
   id: string;
   name: string;
-  status: "pending" | "in-progress" | "completed";
+  status: "pending" | "completed";
 }
 
 interface Semester {
@@ -35,7 +35,7 @@ interface Semester {
   slots: Slot[];
 }
 
-const semesters: Semester[] = [
+const initialSemesters: Semester[] = [
   {
     id: "s2",
     name: "S2",
@@ -44,7 +44,7 @@ const semesters: Semester[] = [
       { id: "s2-b", name: "Slot B", status: "completed" },
       { id: "s2-c", name: "Slot C", status: "completed" },
       { id: "s2-d", name: "Slot D", status: "completed" },
-      { id: "s2-e", name: "Slot E", status: "in-progress" },
+      { id: "s2-e", name: "Slot E", status: "pending" },
       { id: "s2-f", name: "Slot F", status: "pending" },
     ],
   },
@@ -52,7 +52,7 @@ const semesters: Semester[] = [
     id: "s4",
     name: "S4",
     slots: [
-      { id: "s4-a", name: "Slot A", status: "in-progress" },
+      { id: "s4-a", name: "Slot A", status: "pending" },
       { id: "s4-b", name: "Slot B", status: "pending" },
       { id: "s4-c", name: "Slot C", status: "pending" },
       { id: "s4-d", name: "Slot D", status: "pending" },
@@ -74,15 +74,33 @@ const semesters: Semester[] = [
   },
 ];
 
-type ModalState = "none" | "room-config" | "progress" | "invigilator";
+type ModalState = "none" | "room-config" | "progress";
 
-export function SeatingAllocation() {
+interface SeatingAllocationProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function SeatingAllocation({ onNavigate }: SeatingAllocationProps) {
   const [activeModal, setActiveModal] = useState<ModalState>("none");
   const [roomOption, setRoomOption] = useState("default");
-  const [invigilatorOption, setInvigilatorOption] = useState("default");
   const [progress, setProgress] = useState(0);
   const [progressLogs, setProgressLogs] = useState<string[]>([]);
-  const [, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const selectedSlotRef = useRef<string | null>(null);
+  const [semesterData, setSemesterData] = useState<Semester[]>(() => {
+    const saved = localStorage.getItem("semesterData");
+    return saved ? JSON.parse(saved) : initialSemesters;
+  });
+
+  // Persist semester data to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("semesterData", JSON.stringify(semesterData));
+  }, [semesterData]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedSlotRef.current = selectedSlot;
+  }, [selectedSlot]);
 
   const handleSlotClick = (slotId: string, status: string) => {
     if (status === "completed") return;
@@ -119,7 +137,20 @@ export function SeatingAllocation() {
         } else {
           clearInterval(interval);
           setTimeout(() => {
-            setActiveModal("invigilator");
+            // Mark the selected slot as completed
+            const slotId = selectedSlotRef.current;
+            if (slotId) {
+              setSemesterData((prev) =>
+                prev.map((semester) => ({
+                  ...semester,
+                  slots: semester.slots.map((slot) =>
+                    slot.id === slotId
+                      ? { ...slot, status: "completed" as const }
+                      : slot,
+                  ),
+                })),
+              );
+            }
           }, 1000);
         }
       }, 500);
@@ -128,11 +159,6 @@ export function SeatingAllocation() {
     }
   }, [activeModal]);
 
-  const handleGenerateReport = () => {
-    setActiveModal("none");
-    setSelectedSlot(null);
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
@@ -140,13 +166,6 @@ export function SeatingAllocation() {
           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
             <CheckCircle2 className="w-3 h-3 mr-1" />
             Completed
-          </Badge>
-        );
-      case "in-progress":
-        return (
-          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-            <Clock className="w-3 h-3 mr-1" />
-            In Progress
           </Badge>
         );
       default:
@@ -170,7 +189,7 @@ export function SeatingAllocation() {
             Manage seating allocation for exam slots
           </p>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" onClick={() => onNavigate?.("room-config")}>
           <Building2 className="w-4 h-4 mr-2" />
           Manage Rooms
         </Button>
@@ -178,7 +197,7 @@ export function SeatingAllocation() {
 
       {/* Semester Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {semesters.map((semester) => (
+        {semesterData.map((semester) => (
           <Card key={semester.id} className="overflow-hidden">
             <CardHeader className="bg-primary/5 border-b">
               <CardTitle className="text-lg">
@@ -324,85 +343,21 @@ export function SeatingAllocation() {
               ))}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Invigilator Assignment Modal */}
-      <Dialog
-        open={activeModal === "invigilator"}
-        onOpenChange={() => setActiveModal("none")}
-      >
-        <DialogContent className="sm:max-w-md bg-white">
-          <DialogHeader>
-            <DialogTitle className="text-black">
-              Assign Invigilators
-            </DialogTitle>
-            <DialogDescription className="text-gray-500">
-              Select Duty List Source for invigilator assignment
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <RadioGroup
-              value={invigilatorOption}
-              onValueChange={setInvigilatorOption}
-            >
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
-                <RadioGroupItem
-                  value="default"
-                  id="inv-default"
-                  className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor="inv-default"
-                    className="cursor-pointer font-medium text-black"
-                  >
-                    Use Default Faculty List
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-1">
-                    45 Faculty members available
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
-                <RadioGroupItem
-                  value="custom"
-                  id="inv-custom"
-                  className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor="inv-custom"
-                    className="cursor-pointer font-medium text-black"
-                  >
-                    Upload New Duty List
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Upload a custom duty list CSV
-                  </p>
-                  {invigilatorOption === "custom" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 bg-transparent"
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Duty CSV
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={handleGenerateReport}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Generate Final Report
-            </Button>
-          </div>
+          {progress === 100 && (
+            <div className="flex justify-end">
+              <Button
+                onClick={() => {
+                  setActiveModal("none");
+                  setSelectedSlot(null);
+                  onNavigate?.("reports");
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Generate Final Report
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
