@@ -186,7 +186,7 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
 
               <Card 
                 className="cursor-pointer hover:border-green-500 transition-all shadow-sm group"
-                onClick={() => onNavigate('reports')}
+                onClick={() => onNavigate('admin-reports')}
               >
                 <CardContent className="p-8 flex flex-col items-center text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">

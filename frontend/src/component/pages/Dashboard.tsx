@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
+import { Card, CardContent } from "../ui/card"
 import {
   LayoutGrid,
   Building2,
@@ -17,11 +17,7 @@ interface DashboardHomeProps {
 
 export default function Dashboard({ onNavigate }: DashboardHomeProps) {
   return (
-    /**
-     * h-screen: Locks height to viewport
-     * overflow-y-scroll: Forces the RHS scrollbar to be visible/active
-     */
-    <div className="h-screen w-full overflow-y-scroll overflow-x-hidden p-4 md:p-8 space-y-8 bg-background">
+    <div className="w-full p-4 md:p-8 space-y-8 bg-background">
       
       {/* Header */}
       <div>
@@ -157,43 +153,6 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
       </div>
 
-      {/* Upcoming Examinations Panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <CalendarDays className="w-5 h-5 text-primary" />
-            Upcoming Examinations
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          {/* Internal Scroller restored here */}
-          <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
-            {[
-              { name: "S5 University Exam - Slot A", date: "March 12, 2026", venue: "Main Block" },
-              { name: "Internal Assessment - S3", date: "March 18, 2026", venue: "Block C" },
-              { name: "Lab Examination - S6", date: "March 22, 2026", venue: "Computer Lab 2" },
-              { name: "Improvement Exam - S4", date: "March 28, 2026", venue: "Block B" },
-              { name: "Supplementary Exam - S2", date: "April 02, 2026", venue: "Main Hall" },
-            ].map((exam, index) => (
-              <div
-                key={index}
-                className="p-4 rounded-lg border bg-muted/30"
-              >
-                <p className="font-medium text-foreground">{exam.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {exam.date}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Venue: {exam.venue}
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Footer Spacing for better scroll experience */}
       <div className="h-10" />
     </div>
   )
