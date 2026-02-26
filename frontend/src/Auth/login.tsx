@@ -50,7 +50,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
     }
   }
 
-  const handleLoginClick = () => {
+  const handleLoginClick = async() => {
     const cleanedEmail = email.trim().toLowerCase()
     const cleanedPassword = password.trim()
 
@@ -64,13 +64,33 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
       return
     }
 
-    if (cleanedEmail === "admin@sjcetpalai.ac.in") {
-      onLogin('admin')
-    } else {
-      onLogin('staff')
-    }
-  }
+    try {
+    const response = await fetch("http://127.0.0.1:8000/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: cleanedEmail,
+        password: cleanedPassword,
+      }),
+    })
 
+    const data = await response.json()
+
+    if (data.error) {
+      alert(data.error)
+      return
+    }
+
+    // Success
+    onLogin(data.role)
+
+  } catch (err) {
+    console.error("Login failed", err)
+    alert("Server error")
+  }
+}
   const handleSignup = () => {
     if (!signupName.trim()) {
       alert("Enter full name")
