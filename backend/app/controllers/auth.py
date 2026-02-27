@@ -34,3 +34,25 @@ def login_user(request: LoginRequest):
         "role": user_data.data["role"],
         "email": user_data.data["email"]
     }
+
+@router.post("/signup")
+def signup_user(request: LoginRequest):
+
+    auth_response = supabase.auth.sign_up({
+        "email": request.email,
+        "password": request.password
+    })
+
+    if auth_response.user is None:
+        return {"error": "Signup failed"}
+
+    user_id = auth_response.user.id
+
+    supabase.table("users").insert({
+        "id": user_id,
+        "email": request.email,
+        "role": "staff",
+        "is_approved": False
+    }).execute()
+
+    return {"message": "Signup successful. Waiting for admin approval."}

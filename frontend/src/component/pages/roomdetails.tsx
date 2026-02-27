@@ -68,10 +68,17 @@ export function RoomDetails({
   };
 
   const updateSingleRow = (index: number, val: string) => {
-    const updated = [...editedHall.rowConfigs];
-    updated[index] = parseInt(val) || 0;
-    setEditedHall({ ...editedHall, rowConfigs: updated });
-  };
+  let parsed = parseInt(val);
+
+  if (isNaN(parsed) || parsed < 0) {
+    parsed = 0;
+  }
+
+  const updated = [...editedHall.rowConfigs];
+  updated[index] = parsed;
+
+  setEditedHall({ ...editedHall, rowConfigs: updated });
+};
 
   const handleSave = () => {
     onSave({
