@@ -1,10 +1,11 @@
-from sqlalchemy import Column, Integer, String, Date#type:ignore
+from sqlalchemy import Column, Integer, String
 from app.db.database import Base
 
-class Room(Base):
-    __tablename__ = "room1"
 
-    id = Column(Integer, primary_key = True, unique = True, autoincrement= True)
-    room_id = Column(String(50), nullable=False)
+class Room(Base):
+    __tablename__ = "rooms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    room_number = Column(String(50), unique=True, nullable=False)
     rows = Column(Integer, nullable=False)
     cols = Column(Integer, nullable=False)

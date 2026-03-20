@@ -20,6 +20,31 @@ logger = logging.getLogger(__name__)
 class UploadService:
 
     @staticmethod
+    def _read_room_file(content: bytes, filename: str) -> pd.DataFrame:
+        """
+        Read room upload files with headers in the first row.
+        Accepted formats: .csv, .xlsx, .xlsm, .xls (requires xlrd).
+        """
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        try:
+            if ext in {"xlsx", "xlsm", "xlsv"}:
+                return pd.read_excel(BytesIO(content), header=0, engine="openpyxl")
+            elif ext == "xls":
+                return pd.read_excel(BytesIO(content), header=0, engine="xlrd")
+            elif ext == "csv":
+                return pd.read_csv(BytesIO(content), header=0)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported file type '.{ext}'. Accepted formats: xlsx, xls, xlsm, csv",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Could not read room file: {exc}") from exc
+
+    @staticmethod
     def clean_text(value) -> str:
         if value is None:
             return ""
@@ -199,7 +224,7 @@ class UploadService:
 
     @staticmethod
     def parse_room_data(content: bytes, filename: str) -> tuple[list[dict], list[dict]]:
-        dataframe = UploadService._read_file(content, filename)
+        dataframe = UploadService._read_room_file(content, filename)
 
         normalized_columns = {
             str(col).strip().lower().replace(" ", "_"): col
@@ -207,9 +232,9 @@ class UploadService:
         }
 
         column_map = {
-            "room_id": UploadService.get_column_name(
+            "room_number": UploadService.get_column_name(
                 normalized_columns,
-                ["room_id", "room", "room_no", "room_number", "hall"],
+                ["room_number", "room_no", "room", "hall"],
             ),
             "row": UploadService.get_column_name(
                 normalized_columns,
@@ -221,7 +246,7 @@ class UploadService:
             ),
         }
 
-        missing = [name for name in ("room_id", "row", "column") if not column_map[name]]
+        missing = [name for name in ("room_number", "row", "column") if not column_map[name]]
         if missing:
             raise HTTPException(
                 status_code=400,
@@ -232,21 +257,21 @@ class UploadService:
         skipped: list[dict] = []
 
         for idx, row in dataframe.iterrows():
-            row_num = idx + 3
+            row_num = idx + 2
 
-            room_id = UploadService.clean_text(row[column_map["room_id"]])
+            room_number = UploadService.clean_text(row[column_map["room_number"]])
             row_value = pd.to_numeric(row[column_map["row"]], errors="coerce")
             col_value = pd.to_numeric(row[column_map["column"]], errors="coerce")
 
             entry: dict[str, Any] = {
-                "room_id": room_id,
+                "room_number": room_number,
                 "row": int(row_value) if not pd.isna(row_value) else None,
                 "column": int(col_value) if not pd.isna(col_value) else None,
             }
 
             invalid_fields: list[str] = []
-            if not entry["room_id"]:
-                invalid_fields.append("room_id")
+            if not entry["room_number"]:
+                invalid_fields.append("room_number")
             if entry["row"] is None or entry["row"] <= 0:
                 invalid_fields.append("row")
             if entry["column"] is None or entry["column"] <= 0:
@@ -409,25 +434,25 @@ class UploadService:
                 "skipped_sample": skipped[:5],
             }
 
-        room_ids = {entry["room_id"] for entry in data}
+        room_numbers = {entry["room_number"] for entry in data}
         existing_rooms = {
-            room.room_id: room
-            for room in db.query(Room).filter(Room.room_id.in_(room_ids)).all()
+            room.room_number: room
+            for room in db.query(Room).filter(Room.room_number.in_(room_numbers)).all()
         }
 
         inserted = 0
         updated = 0
 
         for entry in data:
-            room = existing_rooms.get(entry["room_id"])
+            room = existing_rooms.get(entry["room_number"])
             if room is None:
                 room = Room(
-                    room_id=entry["room_id"],
+                    room_number=entry["room_number"],
                     rows=entry["row"],
                     cols=entry["column"],
                 )
                 db.add(room)
-                existing_rooms[entry["room_id"]] = room
+                existing_rooms[entry["room_number"]] = room
                 inserted += 1
                 continue
 
