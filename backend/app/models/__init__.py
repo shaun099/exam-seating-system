@@ -4,3 +4,5 @@ from .seating import *
 from .exam import *
 from .branch import *
 from .room import *
+from .allocation import *
+from .seat_allocation import *
