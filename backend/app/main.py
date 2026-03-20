@@ -11,7 +11,7 @@ app=FastAPI(
     description="Backend API for exam seating arrangement system",
     version="1.0.0"
 )
-Base.metadata.drop_all(bind=engine)
+# Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 @app.get("/", summary="Root endpoint")

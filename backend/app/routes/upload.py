@@ -13,3 +13,11 @@ async def upload_excel(
     db: Session = Depends(get_db)
 ):
     return await UploadService.process_upload(file, db)
+
+
+@router.post("/rooms")
+async def upload_rooms(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    return await UploadService.process_room_upload(file, db)

@@ -12,11 +12,37 @@ from app.models.branch import Branch
 from app.models.student import Student
 from app.models.course import Course
 from app.models.seating import Seating
+from app.models.room import Room
 
 logger = logging.getLogger(__name__)
 
 
 class UploadService:
+
+    @staticmethod
+    def _read_room_file(content: bytes, filename: str) -> pd.DataFrame:
+        """
+        Read room upload files with headers in the first row.
+        Accepted formats: .csv, .xlsx, .xlsm, .xls (requires xlrd).
+        """
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        try:
+            if ext in {"xlsx", "xlsm", "xlsv"}:
+                return pd.read_excel(BytesIO(content), header=0, engine="openpyxl")
+            elif ext == "xls":
+                return pd.read_excel(BytesIO(content), header=0, engine="xlrd")
+            elif ext == "csv":
+                return pd.read_csv(BytesIO(content), header=0)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported file type '.{ext}'. Accepted formats: xlsx, xls, xlsm, csv",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Could not read room file: {exc}") from exc
 
     @staticmethod
     def clean_text(value) -> str:
@@ -197,6 +223,72 @@ class UploadService:
         return valid, skipped
 
     @staticmethod
+    def parse_room_data(content: bytes, filename: str) -> tuple[list[dict], list[dict]]:
+        dataframe = UploadService._read_room_file(content, filename)
+
+        normalized_columns = {
+            str(col).strip().lower().replace(" ", "_"): col
+            for col in dataframe.columns
+        }
+
+        column_map = {
+            "room_number": UploadService.get_column_name(
+                normalized_columns,
+                ["room_number", "room_no", "room", "hall"],
+            ),
+            "row": UploadService.get_column_name(
+                normalized_columns,
+                ["row", "rows", "row_size", "row_count"],
+            ),
+            "column": UploadService.get_column_name(
+                normalized_columns,
+                ["column", "columns", "col", "column_size", "col_size", "column_count"],
+            ),
+        }
+
+        missing = [name for name in ("room_number", "row", "column") if not column_map[name]]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(missing)}. Found columns: {list(dataframe.columns)}",
+            )
+
+        valid: list[dict] = []
+        skipped: list[dict] = []
+
+        for idx, row in dataframe.iterrows():
+            row_num = idx + 2
+
+            room_number = UploadService.clean_text(row[column_map["room_number"]])
+            row_value = pd.to_numeric(row[column_map["row"]], errors="coerce")
+            col_value = pd.to_numeric(row[column_map["column"]], errors="coerce")
+
+            entry: dict[str, Any] = {
+                "room_number": room_number,
+                "row": int(row_value) if not pd.isna(row_value) else None,
+                "column": int(col_value) if not pd.isna(col_value) else None,
+            }
+
+            invalid_fields: list[str] = []
+            if not entry["room_number"]:
+                invalid_fields.append("room_number")
+            if entry["row"] is None or entry["row"] <= 0:
+                invalid_fields.append("row")
+            if entry["column"] is None or entry["column"] <= 0:
+                invalid_fields.append("column")
+
+            if invalid_fields:
+                skipped.append({"row": row_num, "reason": f"invalid fields: {invalid_fields}", **entry})
+            else:
+                valid.append(entry)
+
+        logger.info("Parsed %d valid room rows, %d skipped", len(valid), len(skipped))
+        if skipped:
+            logger.warning("Skipped room rows sample: %s", skipped[:10])
+
+        return valid, skipped
+
+    @staticmethod
     def _upsert_lookup_entities(data: list[dict], db: Session) -> tuple[dict, dict, dict, dict]:
         """
         Load existing lookup entities with scoped IN queries,
@@ -327,5 +419,56 @@ class UploadService:
             "inserted": len(new_seating_rows),
             "skipped_parse": len(skipped),
             "skipped_duplicate": len(data) - len(new_seating_rows),
+            "skipped_sample": skipped[:5] if skipped else [],
+        }
+
+    @staticmethod
+    async def process_room_upload(file: UploadFile, db: Session):
+        content = await file.read()
+        data, skipped = UploadService.parse_room_data(content, file.filename or "")
+
+        if not data:
+            return {
+                "message": "No valid room records found",
+                "skipped": len(skipped),
+                "skipped_sample": skipped[:5],
+            }
+
+        room_numbers = {entry["room_number"] for entry in data}
+        existing_rooms = {
+            room.room_number: room
+            for room in db.query(Room).filter(Room.room_number.in_(room_numbers)).all()
+        }
+
+        inserted = 0
+        updated = 0
+
+        for entry in data:
+            room = existing_rooms.get(entry["room_number"])
+            if room is None:
+                room = Room(
+                    room_number=entry["room_number"],
+                    rows=entry["row"],
+                    cols=entry["column"],
+                )
+                db.add(room)
+                existing_rooms[entry["room_number"]] = room
+                inserted += 1
+                continue
+
+            if room.rows != entry["row"] or room.cols != entry["column"]:
+                room.rows = entry["row"]
+                room.cols = entry["column"]
+                updated += 1
+
+        db.commit()
+
+        unchanged = len(data) - inserted - updated
+        return {
+            "message": "Room upload successful",
+            "inserted": inserted,
+            "updated": updated,
+            "unchanged": unchanged,
+            "skipped_parse": len(skipped),
             "skipped_sample": skipped[:5] if skipped else [],
         }
