@@ -34,3 +34,10 @@ class SeatingMatrix(BaseModel):
     slot: str 
     matrix: List[List[Optional[dict]]] 
     # Represents 6 rows x 5 columns
+
+
+
+class AllocationRequest(BaseModel):
+    slot: str
+    rows: int
+    cols: int
