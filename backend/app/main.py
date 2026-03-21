@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter # type: ignore
 from app.routes.healthy import router as health_router
 from app.routes.upload import router as upload_router
-
+from app.routes import upload 
 from app.db.database import Base, engine
 
 import app.models  
@@ -26,3 +26,4 @@ v1_router.include_router(upload_router)
 
 
 app.include_router(v1_router)
+app.include_router(upload.router)
