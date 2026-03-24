@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter # type: ignore
 from app.routes.healthy import router as health_router
 from app.routes.upload import router as upload_router
 from app.routes.allocate import router as allocate_router
-
 from app.db.database import Base, engine
 
 import app.models
