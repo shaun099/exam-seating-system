@@ -1,9 +1,8 @@
-import heapq
 from collections import defaultdict, deque
-
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import case
+import heapq
 
 from app.models.seating import Seating
 from app.models.room import Room
@@ -19,217 +18,334 @@ class AllocationService:
     def allocate(slot: str, rows: int, cols: int, db: Session):
 
         # ------------------------------------------------------------------ #
-        # 1. FETCH STUDENTS                                                   #
-        # Only the three fields we use — avoids hydrating the full ORM object #
+        # STEP 1: FETCH ELIGIBLE STUDENTS FOR THE GIVEN SLOT                 #
         # ------------------------------------------------------------------ #
         entries = (
             db.query(
                 Seating.student_id,
                 Seating.course_id,
                 Seating.exam_id,
+                Student.reg_no,
+                Student.name,
+                Exam.event_name,
             )
             .join(Student, Seating.student_id == Student.id)
             .join(Exam, Seating.exam_id == Exam.id)
-            .filter(Seating.slot == slot, Seating.is_eligible == True)
+            .filter(
+                Seating.slot == slot,
+                Seating.is_eligible == True,
+                Exam.event_name.regexp_match(r'\((R|S)\)'),
+            )
             .order_by(
                 case(
                     (Exam.event_name.contains("(R)"), 0),
                     (Exam.event_name.contains("(S)"), 1),
-                    else_=2
                 ),
-                case(
-                    (Student.reg_no.like("S%"), 0),
-                    (Student.reg_no.like("L%"), 1),
-                    else_=2
-                ),
-                Student.reg_no
+                Student.reg_no,
             )
             .all()
         )
 
         if not entries:
-            raise HTTPException(status_code=404, detail="No students found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No eligible students found for slot '{slot}'"
+            )
 
         # ------------------------------------------------------------------ #
-        # 2. GROUP BY COURSE                                                  #
-        # deque gives O(1) popleft(); list.pop(0) is O(n).                   #
+        # STEP 1B: OVERWRITE EXISTING ALLOCATION IF ANY                      #
         # ------------------------------------------------------------------ #
-        subject_map: dict[str, deque] = defaultdict(deque)
-        exam_id = entries[0].exam_id
+        existing = (
+            db.query(Allocation)
+            .filter(Allocation.slot == slot)
+            .first()
+        )
 
-        for e in entries:
-            subject_map[e.course_id].append(e)
+        if existing:
+            db.query(SeatAllocation).filter(SeatAllocation.allocation_id == existing.id).delete()
+            db.query(Allocation).filter(Allocation.id == existing.id).delete()
+            db.flush()
 
         # ------------------------------------------------------------------ #
-        # 3. FAIL-FAST: ROOMS CHECK                                           #
-        # Check before any DB write so no orphaned Allocation row is created. #
+        # STEP 2: GROUP BY EXAM → COURSE, SORT EACH GROUP BY (DEPT,YEAR,NUM)#
         # ------------------------------------------------------------------ #
-        rooms = db.query(Room.id).all()
+
+        def extract_sort_key(reg_no: str):
+            i = 0
+            while i < len(reg_no) and not reg_no[i].isdigit():
+                i += 1
+            if i >= len(reg_no):
+                return (reg_no, 0, 0)
+            year = int(reg_no[i:i+2])
+            i += 2
+            j = i
+            while j < len(reg_no) and reg_no[j].isalpha():
+                j += 1
+            dept = reg_no[i:j]
+            num = int(reg_no[j:]) if j < len(reg_no) else 0
+            return (dept, year, num)
+
+        def group_and_split(entries):
+            regular = defaultdict(lambda: defaultdict(list))
+            supply  = defaultdict(lambda: defaultdict(list))
+
+            for e in entries:
+                if "(R)" in e.event_name:
+                    regular[e.exam_id][e.course_id].append(e)
+                else:
+                    supply[e.exam_id][e.course_id].append(e)
+
+            regular = {
+                exam_id: {
+                    course_id: deque(sorted(students, key=lambda x: extract_sort_key(x.reg_no)))
+                    for course_id, students in courses.items()
+                }
+                for exam_id, courses in regular.items()
+            }
+
+            supply = {
+                exam_id: {
+                    course_id: deque(sorted(students, key=lambda x: extract_sort_key(x.reg_no)))
+                    for course_id, students in courses.items()
+                }
+                for exam_id, courses in supply.items()
+            }
+
+            return regular, supply
+
+        regular_groups, supply_groups = group_and_split(entries)
+
+        # ------------------------------------------------------------------ #
+        # STEP 3A: FLATTEN REGULAR BY COURSE_ID                              #
+        # Keys: int (course_id)                                               #
+        # ------------------------------------------------------------------ #
+        flat_regular = defaultdict(deque)
+        for eid, courses in regular_groups.items():
+            for course_id, students in courses.items():
+                flat_regular[course_id].extend(students)
+
+        # ------------------------------------------------------------------ #
+        # STEP 3B: BUILD REGULAR HEAP                                         #
+        # ------------------------------------------------------------------ #
+        regular_heap = []
+        for course_id, students in flat_regular.items():
+            heapq.heappush(regular_heap, (-len(students), course_id))
+
+        # ------------------------------------------------------------------ #
+        # STEP 3C: FLATTEN SUPPLY BY (EID, COURSE_ID) + BUILD SUPPLY HEAP    #
+        # Keys: tuple (eid, course_id)                                        #
+        # ------------------------------------------------------------------ #
+        flat_supply = {}
+        supply_heap = []
+        for eid, courses in supply_groups.items():
+            for course_id, students in courses.items():
+                flat_supply[(eid, course_id)] = students
+                heapq.heappush(supply_heap, (-len(students), eid, course_id))
+
+        # ------------------------------------------------------------------ #
+        # STEP 4A: FETCH ROOMS                                                #
+        # ------------------------------------------------------------------ #
+        rooms = db.query(Room).order_by(Room.id).all()
+
         if not rooms:
-            raise HTTPException(status_code=400, detail="No rooms available")
+            raise HTTPException(
+                status_code=400,
+                detail="No rooms available for allocation"
+            )
 
         # ------------------------------------------------------------------ #
-        # 4. CREATE ALLOCATION ENTRY                                          #
-        # flush() gets allocation.id without committing; everything commits   #
-        # in one shot at the end (or rolls back on failure).                  #
+        # STEP 4B: CREATE ALLOCATION ENTRY                                    #
         # ------------------------------------------------------------------ #
-        allocation = Allocation(exam_id=exam_id, slot=slot)
+        allocation_exam_id = entries[0].exam_id
+        allocation = Allocation(exam_id=allocation_exam_id, slot=slot)
         db.add(allocation)
         db.flush()
 
         # ------------------------------------------------------------------ #
-        # 5. BUILD MAX-HEAP                                                   #
-        # Negative count so Python's min-heap yields the largest group first. #
+        # STEP 5: ALLOCATION LOOP                                             #
+        #                                                                     #
+        # Single unified run — regular heap has priority.                     #
+        # When regular exhausts, supply fills remaining seats in same room.   #
+        # Room is filled to max capacity before moving to next room.          #
+        # Regular keys: int (course_id)                                       #
+        # Supply keys:  tuple (eid, course_id)                                #
         # ------------------------------------------------------------------ #
-        heap: list[tuple[int, str]] = []
-        for course_id, students in subject_map.items():
-            heapq.heappush(heap, (-len(students), course_id))
+        seat_objects = []
+        room_index   = 0
 
-        # ------------------------------------------------------------------ #
-        # 6. ACTIVE QUEUE — always holds up to 2 live course_ids             #
-        # ------------------------------------------------------------------ #
-        active: deque[str] = deque()
+        # Combined student map — regular keys are int, supply keys are tuple
+        combined_map = {}
+        combined_map.update(flat_regular)   # { course_id: deque }
+        combined_map.update(flat_supply)    # { (eid, course_id): deque }
 
-        def pop_heap() -> str | None:
-            """Return the course_id with the most remaining students."""
-            while heap:
-                _, cid = heapq.heappop(heap)
-                if subject_map[cid]:        # skip if somehow empty
-                    return cid
-            return None
+        def run_allocation():
+            nonlocal room_index
 
-        def fill_active() -> None:
-            """Top up the active queue to 2 subjects (or 1 if heap is empty)."""
-            while len(active) < 2:
-                nxt = pop_heap()
-                if nxt is None:
+            active_primary   = None
+            active_secondary = None
+
+            def _pop_next_from_heap(heap, exclude_key=None):
+                """
+                Pops the next non-empty, non-excluded key from the heap.
+                Exhausted entries are discarded. Skipped-due-to-exclude are
+                pushed back. Returns the key or None if heap is empty.
+                """
+                skipped = []
+                result  = None
+                while heap:
+                    entry    = heapq.heappop(heap)
+                    key      = entry[1] if len(entry) == 2 else (entry[1], entry[2])
+                    students = combined_map.get(key)
+                    if not students:
+                        continue                     # exhausted — discard
+                    if key == exclude_key:
+                        skipped.append(entry)        # wrong subject — skip
+                        continue
+                    result = key
                     break
-                active.append(nxt)
+                for e in skipped:
+                    heapq.heappush(heap, e)
+                return result
 
-        fill_active()
+            def refill_active():
+                """
+                Ensures active_primary and active_secondary are filled
+                (if students remain) using regular heap first, supply heap
+                second. Never double-assigns the same key to both slots.
+                """
+                nonlocal active_primary, active_secondary
 
-        # ------------------------------------------------------------------ #
-        # 7. COLUMN LAYOUT                                                    #
-        #                                                                     #
-        # 1-indexed  :  col 1   col 2   col 3   col 4   col 5               #
-        # 0-indexed  :  col 0   col 1   col 2   col 3   col 4               #
-        # type       :  PRI     SEC     PRI     SEC     PRI                  #
-        #                                                                     #
-        # PRIMARY   (0-indexed even) → subject with MORE students            #
-        # SECONDARY (0-indexed odd)  → subject with FEWER students           #
-        #                                                                     #
-        # If only 1 subject remains it fills PRIMARY cols only.              #
-        # ------------------------------------------------------------------ #
+                # Drop exhausted slots
+                if active_primary is not None and not combined_map.get(active_primary):
+                    active_primary = None
+                if active_secondary is not None and not combined_map.get(active_secondary):
+                    active_secondary = None
 
-        # ------------------------------------------------------------------ #
-        # 8. ROOM ALLOCATION LOOP                                            #
-        # ------------------------------------------------------------------ #
-        seat_objects: list[SeatAllocation] = []
+                # Fill primary from regular heap if empty
+                if active_primary is None:
+                    active_primary = _pop_next_from_heap(regular_heap)
 
-        def get_pri_sec() -> tuple[str | None, str | None]:
-            """
-            Return (primary_course_id, secondary_course_id) based on current
-            student counts.  secondary is None when only 1 subject is active.
-            """
-            if len(active) == 0:
-                return None, None
-            if len(active) == 1:
-                return active[0], None
-            a, b = active[0], active[1]
-            return (a, b) if len(subject_map[a]) >= len(subject_map[b]) else (b, a)
+                # Fill secondary from regular heap (exclude primary to avoid duplicate)
+                if active_secondary is None:
+                    active_secondary = _pop_next_from_heap(regular_heap, exclude_key=active_primary)
 
-        def allocate_room(room_id: int) -> None:
-            # Lock primary / secondary at the START of the room.
-            # Sizes are fixed here; we do NOT re-evaluate per column
-            # (that would cause the assignment to flip mid-room as counts
-            # change, leading to same-subject adjacency violations).
-            pri, sec = get_pri_sec()
+                # Still need primary? Try supply
+                if active_primary is None:
+                    active_primary = _pop_next_from_heap(supply_heap)
 
-            for col in range(cols):
-                is_primary_col = (col % 2 == 0)
+                # Still need secondary? Try supply (exclude primary)
+                if active_secondary is None:
+                    active_secondary = _pop_next_from_heap(supply_heap, exclude_key=active_primary)
 
-                # The subject assigned to this column type for the whole column.
-                col_subject   = pri if is_primary_col else sec
-                # The subject filling the adjacent col type (used to prevent
-                # placing the same subject in neighbouring columns).
-                other_subject = sec if is_primary_col else pri
+            refill_active()
 
-                if col_subject is None:
-                    continue   # no subject for this col type (e.g. last subject → skip SEC cols)
+            while (active_primary or active_secondary) and room_index < len(rooms):
+                room = rooms[room_index]
+                room_index += 1
 
-                for row in range(rows):
+                # ---------------------------------------------------------- #
+                # Lock primary/secondary ONCE per room.                       #
+                # primary (more students) → even cols                         #
+                # secondary (fewer students) → odd cols                       #
+                # ---------------------------------------------------------- #
+                if active_primary and active_secondary:
+                    cnt_p = len(combined_map.get(active_primary, []))
+                    cnt_s = len(combined_map.get(active_secondary, []))
+                    if cnt_s > cnt_p:
+                        active_primary, active_secondary = active_secondary, active_primary
+                    primary   = active_primary
+                    secondary = active_secondary
+                elif active_primary:
+                    primary   = active_primary
+                    secondary = None
+                else:
+                    primary   = active_secondary
+                    secondary = None
 
-                    # If this column's subject is exhausted, pull the next one
-                    # from the heap.  The replacement must differ from the
-                    # subject in adjacent columns to maintain the alternating rule.
-                    while col_subject is not None and not subject_map[col_subject]:
-                        if col_subject in active:
-                            active.remove(col_subject)
-                        fill_active()
+                for col in range(cols):
 
-                        # Find a replacement that won't create an adjacency clash.
-                        replacement = None
-                        for cid in list(active):
-                            if cid != other_subject and subject_map[cid]:
-                                replacement = cid
-                                break
+                    if secondary is None:
+                        col_subject   = primary
+                        other_subject = None
+                    else:
+                        col_subject   = primary if col % 2 == 0 else secondary
+                        other_subject = secondary if col % 2 == 0 else primary
 
-                        col_subject = replacement
+                    for row in range(rows):
+                        students = combined_map.get(col_subject)
 
-                        # Re-lock pri/sec so subsequent columns in this room
-                        # stay consistent after the refill.
-                        pri, sec = get_pri_sec()
-                        if is_primary_col:
-                            pri = col_subject if col_subject else pri
-                        else:
-                            sec = col_subject if col_subject else sec
+                        # Current column subject exhausted mid-column
+                        if not students:
+                            if other_subject and combined_map.get(other_subject):
+                                # Switch to the other subject for remaining rows
+                                col_subject   = other_subject
+                                other_subject = None
+                                students      = combined_map.get(col_subject)
+                            else:
+                                # Both exhausted — refill and continue in same room
+                                active_primary   = None
+                                active_secondary = None
+                                refill_active()
+                                if not active_primary and not active_secondary:
+                                    break
+                                # Update local locks for remaining cols/rows
+                                primary       = active_primary or active_secondary
+                                secondary     = active_secondary if active_primary else None
+                                col_subject   = primary
+                                other_subject = None
+                                students      = combined_map.get(col_subject)
 
-                    if col_subject is None:
-                        break   # nothing left for this col type
+                        if not students:
+                            break
 
-                    e = subject_map[col_subject].popleft()
-                    seat_objects.append(
-                        SeatAllocation(
-                            allocation_id=allocation.id,
-                            room_id=room_id,
-                            row=row,
-                            col=col,
-                            student_id=e.student_id,
-                            course_id=e.course_id,
+                        e = students.popleft()
+                        seat_objects.append(
+                            SeatAllocation(
+                                allocation_id = allocation.id,
+                                room_id       = room.id,
+                                row           = row,
+                                col           = col,
+                                student_id    = e.student_id,
+                                course_id     = e.course_id,
+                            )
                         )
-                    )
 
-        for room in rooms:
-            if not active:
-                break
-            allocate_room(room.id)
-            # Carry-over: subjects that still have students remain in `active`.
-            # Top up to 2 for the next room in case one was exhausted.
-            fill_active()
+                # ---------------------------------------------------------- #
+                # After entire room — carry forward whatever primary/secondary#
+                # were locked at end of room (may have been updated mid-room) #
+                # then refill any exhausted slots                             #
+                # ---------------------------------------------------------- #
+                active_primary   = primary   if combined_map.get(primary)   else None
+                active_secondary = secondary if combined_map.get(secondary) else None
+                refill_active()
 
         # ------------------------------------------------------------------ #
-        # 9. FINAL CHECK                                                      #
+        # SINGLE RUN — regular priority, supply fills remaining seats         #
         # ------------------------------------------------------------------ #
-        remaining = sum(len(q) for q in subject_map.values())
+        run_allocation()
+
+        # ------------------------------------------------------------------ #
+        # STEP 6: FINAL CHECK                                                 #
+        # ------------------------------------------------------------------ #
+        remaining  = sum(len(q) for q in flat_regular.values())
+        remaining += sum(len(q) for q in flat_supply.values())
+
         if remaining > 0:
             db.rollback()
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Not enough rooms to allocate all students. "
-                    f"{remaining} student(s) unallocated."
-                ),
+                detail=f"Not enough rooms. {remaining} student(s) unallocated."
             )
 
         # ------------------------------------------------------------------ #
-        # 10. SAVE — single commit                                            #
-        # bulk_save_objects issues one multi-row INSERT, much faster than     #
-        # adding ORM objects one by one.                                      #
+        # STEP 7: SAVE                                                        #
         # ------------------------------------------------------------------ #
         db.bulk_save_objects(seat_objects)
         db.commit()
 
         return {
             "success": True,
-            "message": f"Allocation completed. Total students: {len(seat_objects)}",
+            "message": f"Allocation completed. Total students seated: {len(seat_objects)}",
+            "allocation_id": allocation.id,
+            "total_rooms_used": room_index,
         }
