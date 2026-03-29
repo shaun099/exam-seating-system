@@ -149,8 +149,8 @@ class ClassMatrixService:
         room = room_payload["room"]
         cells = room_payload["cells"]
 
-        rows_count = int(room["rows"])
-        cols_count = int(room["cols"])
+        rows_count = max((row for row, col in cells.keys()), default=0) + 1
+        cols_count = max((col for row, col in cells.keys()), default=0) + 1
 
         course_codes_by_col = ["" for _ in range(cols_count)]
         student_grid = [["" for _ in range(cols_count)] for _ in range(rows_count)]

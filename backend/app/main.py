@@ -22,16 +22,16 @@ app=FastAPI(
     description="Backend API for exam seating arrangement system",
     version="1.0.0"
 )
-Base.metadata.drop_all(bind=engine, tables=[
-    SeatAllocation.__table__,
-    Seating.__table__,
-    Allocation.__table__,
-    Student.__table__,
-    Course.__table__,
-    Exam.__table__,
-    Branch.__table__,
-    Room.__table__,
-])
+# Base.metadata.drop_all(bind=engine, tables=[
+#     SeatAllocation.__table__,
+#     Seating.__table__,
+#     Allocation.__table__,
+#     Student.__table__,
+#     Course.__table__,
+#     Exam.__table__,
+#     Branch.__table__,
+#     Room.__table__,
+# ])
 Base.metadata.create_all(bind=engine)
 
 @app.get("/", summary="Root endpoint")
