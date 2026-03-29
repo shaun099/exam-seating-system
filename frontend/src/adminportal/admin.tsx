@@ -49,11 +49,12 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
     setView(initialView)
   }, [initialView])
 
+  const API_BASE = import.meta.env.VITE_API_URL
   // ✅ FETCH USERS
   useEffect(() => {
     const token = localStorage.getItem("token")
 
-    fetch("http://127.0.0.1:8000/admin/users", {
+    fetch(`${API_BASE}/admin/users`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -76,7 +77,7 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
 
     const token = localStorage.getItem("token")
 
-    await fetch(`http://127.0.0.1:8000/admin/approve/${id}`, {
+    await fetch(`${API_BASE}/admin/approve/${id}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`
@@ -96,7 +97,7 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
 
     const token = localStorage.getItem("token")
 
-    await fetch(`http://127.0.0.1:8000/admin/revoke/${id}`, {
+    await fetch(`${API_BASE}/admin/revoke/${id}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`
@@ -116,7 +117,7 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
 
     const token = localStorage.getItem("token")
 
-    await fetch(`http://127.0.0.1:8000/admin/revoke/${id}`, {
+    await fetch(`${API_BASE}/admin/revoke/${id}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`

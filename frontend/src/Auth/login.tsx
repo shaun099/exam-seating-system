@@ -24,6 +24,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
   const [confirmPassword, setConfirmPassword] = useState("")
   const [signupEmailValid, setSignupEmailValid] = useState<boolean | null>(null)
 
+  const API_BASE = import.meta.env.VITE_API_URL
   // Must contain at least one alphabet before @
   const validateEmail = (value: string) => {
     const pattern = /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/
@@ -60,7 +61,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
   }
 
   try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -104,7 +105,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
   }
 
   try {
-      const res = await fetch("http://127.0.0.1:8000/auth/signup", {
+      const res = await fetch(`${API_BASE}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
