@@ -2,8 +2,7 @@ from fastapi import APIRouter
 from app.services.auth_service import approve_user_service, revoke_user_service
 from app.db.database import SessionLocal
 
-# ✅ FIX: import from correct file (not __init__)
-from app.models.user import User   # <-- IMPORTANT CHANGE
+from app.models.user import User  
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 

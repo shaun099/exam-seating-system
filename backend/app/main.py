@@ -12,6 +12,7 @@ from app.routes.download import router as download_router
 from app.db.database import Base, engine
 from app.routes import auth, admin
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 import app.models
 from app.models import (
@@ -32,9 +33,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
+origins = os.getenv("CORS_ORIGINS", "").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # ❗ NOT "*"
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
