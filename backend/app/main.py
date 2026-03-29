@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter # type: ignore
 from app.routes.healthy import router as health_router
 from app.routes.upload import router as upload_router
 from app.routes.allocate import router as allocate_router
+from app.routes.download import router as download_router
 from app.db.database import Base, engine
 
 import app.models
@@ -43,6 +44,7 @@ v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(health_router)
 v1_router.include_router(upload_router)
 v1_router.include_router(allocate_router)
+v1_router.include_router(download_router)
 
 
 
