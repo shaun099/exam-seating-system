@@ -12,3 +12,4 @@ def signup(data: SignupRequest):
 @router.post("/login")
 def login(data: LoginRequest):
     return login_service(data)
+

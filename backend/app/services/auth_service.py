@@ -4,11 +4,28 @@ from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.models.user import User
 from fastapi import HTTPException
+from fastapi import Header
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+def get_current_user(authorization: str = Header(...)):
+    try:
+        token = authorization.split(" ")[1]
+
+        user = supabase.auth.get_user(token)
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        return user
+
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 def signup_service(data):
     db: Session = SessionLocal()
