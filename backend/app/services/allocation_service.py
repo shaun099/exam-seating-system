@@ -62,12 +62,14 @@ class AllocationService:
         )
 
         if existing:
-            db.query(SeatAllocation).filter(SeatAllocation.allocation_id == existing.id).delete()
+            db.query(SeatAllocation).filter(
+                SeatAllocation.allocation_id == existing.id
+            ).delete()
             db.query(Allocation).filter(Allocation.id == existing.id).delete()
             db.flush()
 
         # ------------------------------------------------------------------ #
-        # STEP 2: GROUP BY EXAM → COURSE, SORT EACH GROUP BY (DEPT,YEAR,NUM)#
+        # STEP 2: GROUP BY EXAM → COURSE, SORT BY (DEPT, YEAR, NUM)         #
         # ------------------------------------------------------------------ #
 
         def extract_sort_key(reg_no: str):
@@ -82,65 +84,67 @@ class AllocationService:
             while j < len(reg_no) and reg_no[j].isalpha():
                 j += 1
             dept = reg_no[i:j]
-            num = int(reg_no[j:]) if j < len(reg_no) else 0
+            num  = int(reg_no[j:]) if j < len(reg_no) else 0
             return (dept, year, num)
 
         def group_and_split(entries):
             regular = defaultdict(lambda: defaultdict(list))
             supply  = defaultdict(lambda: defaultdict(list))
-
             for e in entries:
                 if "(R)" in e.event_name:
                     regular[e.exam_id][e.course_id].append(e)
                 else:
                     supply[e.exam_id][e.course_id].append(e)
-
             regular = {
-                exam_id: {
-                    course_id: deque(sorted(students, key=lambda x: extract_sort_key(x.reg_no)))
-                    for course_id, students in courses.items()
+                eid: {
+                    cid: deque(sorted(sts, key=lambda x: extract_sort_key(x.reg_no)))
+                    for cid, sts in courses.items()
                 }
-                for exam_id, courses in regular.items()
+                for eid, courses in regular.items()
             }
-
             supply = {
-                exam_id: {
-                    course_id: deque(sorted(students, key=lambda x: extract_sort_key(x.reg_no)))
-                    for course_id, students in courses.items()
+                eid: {
+                    cid: deque(sorted(sts, key=lambda x: extract_sort_key(x.reg_no)))
+                    for cid, sts in courses.items()
                 }
-                for exam_id, courses in supply.items()
+                for eid, courses in supply.items()
             }
-
             return regular, supply
 
         regular_groups, supply_groups = group_and_split(entries)
 
         # ------------------------------------------------------------------ #
-        # STEP 3A: FLATTEN REGULAR BY COURSE_ID                              #
-        # Keys: int (course_id)                                               #
+        # STEP 3: BUILD STUDENT MAP + SINGLE COMBINED HEAP                   #
+        #                                                                     #
+        # One heap with priority tag:                                         #
+        #   regular → priority 0 (comes first)                               #
+        #   supply  → priority 1 (comes after)                               #
+        #                                                                     #
+        # Heap entry: (-count, priority, key)                                 #
+        #   regular key → course_id (int)                                     #
+        #   supply key  → (eid, course_id) (tuple)                           #
+        #                                                                     #
+        # student_map: { key → deque([entry, ...]) }                         #
         # ------------------------------------------------------------------ #
+        student_map = {}
+        heap        = []
+
+        # Regular — flatten by course_id
         flat_regular = defaultdict(deque)
         for eid, courses in regular_groups.items():
-            for course_id, students in courses.items():
-                flat_regular[course_id].extend(students)
+            for cid, students in courses.items():
+                flat_regular[cid].extend(students)
 
-        # ------------------------------------------------------------------ #
-        # STEP 3B: BUILD REGULAR HEAP                                         #
-        # ------------------------------------------------------------------ #
-        regular_heap = []
-        for course_id, students in flat_regular.items():
-            heapq.heappush(regular_heap, (-len(students), course_id))
+        for cid, students in flat_regular.items():
+            student_map[cid] = students
+            heapq.heappush(heap, (-len(students), 0, cid))
 
-        # ------------------------------------------------------------------ #
-        # STEP 3C: FLATTEN SUPPLY BY (EID, COURSE_ID) + BUILD SUPPLY HEAP    #
-        # Keys: tuple (eid, course_id)                                        #
-        # ------------------------------------------------------------------ #
-        flat_supply = {}
-        supply_heap = []
+        # Supply — keep (eid, course_id) as key
         for eid, courses in supply_groups.items():
-            for course_id, students in courses.items():
-                flat_supply[(eid, course_id)] = students
-                heapq.heappush(supply_heap, (-len(students), eid, course_id))
+            for cid, students in courses.items():
+                key = (eid, cid)
+                student_map[key] = students
+                heapq.heappush(heap, (-len(students), 1, key))
 
         # ------------------------------------------------------------------ #
         # STEP 4A: FETCH ROOMS                                                #
@@ -157,178 +161,221 @@ class AllocationService:
         # STEP 4B: CREATE ALLOCATION ENTRY                                    #
         # ------------------------------------------------------------------ #
         allocation_exam_id = entries[0].exam_id
-        allocation = Allocation(exam_id=allocation_exam_id, slot=slot)
+        allocation         = Allocation(exam_id=allocation_exam_id, slot=slot)
         db.add(allocation)
         db.flush()
 
         # ------------------------------------------------------------------ #
         # STEP 5: ALLOCATION LOOP                                             #
         #                                                                     #
-        # Single unified run — regular heap has priority.                     #
-        # When regular exhausts, supply fills remaining seats in same room.   #
-        # Room is filled to max capacity before moving to next room.          #
-        # Regular keys: int (course_id)                                       #
-        # Supply keys:  tuple (eid, course_id)                                #
+        # active_primary   → subject filling even cols (more students)        #
+        # active_secondary → subject filling odd cols (fewer students)        #
+        #                                                                     #
+        # Both are popped from heap once and stay active until exhausted.     #
+        # Heap is only consulted when an active slot becomes None.            #
         # ------------------------------------------------------------------ #
         seat_objects = []
         room_index   = 0
 
-        # Combined student map — regular keys are int, supply keys are tuple
-        combined_map = {}
-        combined_map.update(flat_regular)   # { course_id: deque }
-        combined_map.update(flat_supply)    # { (eid, course_id): deque }
+        active_primary   = None
+        active_secondary = None
 
-        def run_allocation():
-            nonlocal room_index
+        def pop_from_heap(exclude_key=None):
+            """
+            Pops next non-empty subject from heap.
+            Skips exhausted entries (discards them).
+            Skips exclude_key entries (pushes them back).
+            Returns key or None if heap is empty.
+            """
+            skipped = []
+            result  = None
+            while heap:
+                entry    = heapq.heappop(heap)
+                # entry = (-count, priority, key)
+                key      = entry[2]
+                students = student_map.get(key)
+                if not students:
+                    continue                     # exhausted — discard
+                if key == exclude_key:
+                    skipped.append(entry)        # wrong slot — push back
+                    continue
+                result = key
+                break
+            for e in skipped:
+                heapq.heappush(heap, e)
+            return result
 
-            active_primary   = None
-            active_secondary = None
+        def refill():
+            """
+            Tops up active_primary and active_secondary.
+            First tries heap, then falls back to scanning student_map directly
+            in case heap is empty but students still remain.
+            """
+            nonlocal active_primary, active_secondary
 
-            def _pop_next_from_heap(heap, exclude_key=None):
-                """
-                Pops the next non-empty, non-excluded key from the heap.
-                Exhausted entries are discarded. Skipped-due-to-exclude are
-                pushed back. Returns the key or None if heap is empty.
-                """
-                skipped = []
-                result  = None
-                while heap:
-                    entry    = heapq.heappop(heap)
-                    key      = entry[1] if len(entry) == 2 else (entry[1], entry[2])
-                    students = combined_map.get(key)
-                    if not students:
-                        continue                     # exhausted — discard
-                    if key == exclude_key:
-                        skipped.append(entry)        # wrong subject — skip
-                        continue
-                    result = key
-                    break
-                for e in skipped:
-                    heapq.heappush(heap, e)
-                return result
+            # Drop exhausted
+            if active_primary is not None and not student_map.get(active_primary):
+                active_primary = None
+            if active_secondary is not None and not student_map.get(active_secondary):
+                active_secondary = None
 
-            def refill_active():
-                """
-                Ensures active_primary and active_secondary are filled
-                (if students remain) using regular heap first, supply heap
-                second. Never double-assigns the same key to both slots.
-                """
-                nonlocal active_primary, active_secondary
+            # Fill primary from heap
+            if active_primary is None:
+                active_primary = pop_from_heap(exclude_key=active_secondary)
 
-                # Drop exhausted slots
-                if active_primary is not None and not combined_map.get(active_primary):
-                    active_primary = None
-                if active_secondary is not None and not combined_map.get(active_secondary):
-                    active_secondary = None
+            # Fill secondary from heap (exclude primary)
+            if active_secondary is None:
+                active_secondary = pop_from_heap(exclude_key=active_primary)
 
-                # Fill primary from regular heap if empty
-                if active_primary is None:
-                    active_primary = _pop_next_from_heap(regular_heap)
+            # ---------------------------------------------------------- #
+            # Fallback: heap empty but student_map still has students    #
+            # Scan student_map directly and pick any non-empty subject   #
+            # ---------------------------------------------------------- #
+            if active_primary is None:
+                for key, q in student_map.items():
+                    if q and key != active_secondary:
+                        active_primary = key
+                        break
 
-                # Fill secondary from regular heap (exclude primary to avoid duplicate)
-                if active_secondary is None:
-                    active_secondary = _pop_next_from_heap(regular_heap, exclude_key=active_primary)
+            if active_secondary is None:
+                for key, q in student_map.items():
+                    if q and key != active_primary:
+                        active_secondary = key
+                        break
 
-                # Still need primary? Try supply
-                if active_primary is None:
-                    active_primary = _pop_next_from_heap(supply_heap)
+        # Initial fill
+        refill()
 
-                # Still need secondary? Try supply (exclude primary)
-                if active_secondary is None:
-                    active_secondary = _pop_next_from_heap(supply_heap, exclude_key=active_primary)
+        while (active_primary is not None or active_secondary is not None) \
+                and room_index < len(rooms):
 
-            refill_active()
+            room = rooms[room_index]
+            room_index += 1
 
-            while (active_primary or active_secondary) and room_index < len(rooms):
-                room = rooms[room_index]
-                room_index += 1
+            # ---------------------------------------------------------- #
+            # Lock primary/secondary at start of room.                    #
+            # primary   → more students → even cols (0, 2, 4...)          #
+            # secondary → fewer students → odd cols  (1, 3, 5...)         #
+            # ---------------------------------------------------------- #
+            if active_primary is not None and active_secondary is not None:
+                cnt_p = len(student_map.get(active_primary,   []))
+                cnt_s = len(student_map.get(active_secondary, []))
+                if cnt_s > cnt_p:
+                    active_primary, active_secondary = \
+                        active_secondary, active_primary
+                primary   = active_primary
+                secondary = active_secondary
+            elif active_primary is not None:
+                primary   = active_primary
+                secondary = None
+            else:
+                primary   = active_secondary
+                secondary = None
 
-                # ---------------------------------------------------------- #
-                # Lock primary/secondary ONCE per room.                       #
-                # primary (more students) → even cols                         #
-                # secondary (fewer students) → odd cols                       #
-                # ---------------------------------------------------------- #
-                if active_primary and active_secondary:
-                    cnt_p = len(combined_map.get(active_primary, []))
-                    cnt_s = len(combined_map.get(active_secondary, []))
-                    if cnt_s > cnt_p:
-                        active_primary, active_secondary = active_secondary, active_primary
-                    primary   = active_primary
-                    secondary = active_secondary
-                elif active_primary:
-                    primary   = active_primary
-                    secondary = None
+            # Track what actually filled last row of previous col
+            # to prevent adjacent columns having same subject
+            last_col_subject = None
+
+            for col in range(cols):
+
+                if secondary is None:
+                    col_subject   = primary
+                    other_subject = None
                 else:
-                    primary   = active_secondary
-                    secondary = None
+                    natural       = primary   if col % 2 == 0 else secondary
+                    natural_other = secondary if col % 2 == 0 else primary
 
-                for col in range(cols):
-
-                    if secondary is None:
-                        col_subject   = primary
-                        other_subject = None
-                    else:
-                        col_subject   = primary if col % 2 == 0 else secondary
-                        other_subject = secondary if col % 2 == 0 else primary
-
-                    for row in range(rows):
-                        students = combined_map.get(col_subject)
-
-                        # Current column subject exhausted mid-column
-                        if not students:
-                            if other_subject and combined_map.get(other_subject):
-                                # Switch to the other subject for remaining rows
-                                col_subject   = other_subject
-                                other_subject = None
-                                students      = combined_map.get(col_subject)
+                    if last_col_subject == natural:
+                        # Adjacency violation — try natural_other first
+                        if student_map.get(natural_other):
+                            col_subject   = natural_other
+                            other_subject = natural
+                        else:
+                            # natural_other exhausted — pull fresh from heap
+                            fresh = pop_from_heap(exclude_key=natural)
+                            if fresh is not None:
+                                col_subject      = fresh
+                                other_subject    = natural
+                                secondary        = fresh
+                                active_secondary = fresh
                             else:
-                                # Both exhausted — refill and continue in same room
-                                active_primary   = None
-                                active_secondary = None
-                                refill_active()
-                                if not active_primary and not active_secondary:
-                                    break
-                                # Update local locks for remaining cols/rows
-                                primary       = active_primary or active_secondary
-                                secondary     = active_secondary if active_primary else None
-                                col_subject   = primary
+                                # Nothing left in heap — use natural as last resort
+                                col_subject   = natural
                                 other_subject = None
-                                students      = combined_map.get(col_subject)
+                    else:
+                        col_subject   = natural
+                        other_subject = natural_other
+
+                cur_subject   = col_subject
+                last_row_subj = col_subject
+
+                for row in range(rows):
+                    students = student_map.get(cur_subject)
+
+                    if not students:
+                        remaining_seats = rows - row
+
+                        if remaining_seats < 3:
+                            # Not worth filling — leave empty, move to next col
+                            break
+
+                        # -------------------------------------------------- #
+                        # Pull fresh subject from heap — ignore cur_other     #
+                        # The new subject becomes the new secondary           #
+                        # -------------------------------------------------- #
+                        new_subject = pop_from_heap(exclude_key=cur_subject)
+
+                        if new_subject is None:
+                            # Heap empty — nothing left to fill with
+                            break
+
+                        # New subject fills remaining rows of this column
+                        # and becomes the new secondary for subsequent columns
+                        cur_subject      = new_subject
+                        secondary        = new_subject  # ← update secondary for next cols
+                        active_secondary = new_subject  # ← update active slot too
+                        students         = student_map.get(cur_subject)
 
                         if not students:
                             break
 
-                        e = students.popleft()
-                        seat_objects.append(
-                            SeatAllocation(
-                                allocation_id = allocation.id,
-                                room_id       = room.id,
-                                row           = row,
-                                col           = col,
-                                student_id    = e.student_id,
-                                course_id     = e.course_id,
-                            )
+                    last_row_subj = cur_subject
+
+                    e = students.popleft()
+                    seat_objects.append(
+                        SeatAllocation(
+                            allocation_id = allocation.id,
+                            room_id       = room.id,
+                            row           = row,
+                            col           = col,
+                            student_id    = e.student_id,
+                            course_id     = e.course_id,
                         )
+                    )
 
-                # ---------------------------------------------------------- #
-                # After entire room — carry forward whatever primary/secondary#
-                # were locked at end of room (may have been updated mid-room) #
-                # then refill any exhausted slots                             #
-                # ---------------------------------------------------------- #
-                active_primary   = primary   if combined_map.get(primary)   else None
-                active_secondary = secondary if combined_map.get(secondary) else None
-                refill_active()
+                last_col_subject = last_row_subj
 
-        # ------------------------------------------------------------------ #
-        # SINGLE RUN — regular priority, supply fills remaining seats         #
-        # ------------------------------------------------------------------ #
-        run_allocation()
+            # ---------------------------------------------------------- #
+            # After entire room — update active slots and refill          #
+            # ---------------------------------------------------------- #
+            active_primary   = primary   if student_map.get(primary)   else None
+            active_secondary = secondary if student_map.get(secondary) else None
+            refill()
 
         # ------------------------------------------------------------------ #
         # STEP 6: FINAL CHECK                                                 #
         # ------------------------------------------------------------------ #
-        remaining  = sum(len(q) for q in flat_regular.values())
-        remaining += sum(len(q) for q in flat_supply.values())
+
+
+        # DEBUG
+        print(f"Total seat_objects: {len(seat_objects)}")
+        print(f"Remaining in student_map:")
+        for key, q in student_map.items():
+            if q:
+                print(f"  key={key} → {len(q)} students")
+                print(f"Heap remaining: {len(heap)}")
+                print(f"room_index: {room_index}, total_rooms: {len(rooms)}")
+        remaining = sum(len(q) for q in student_map.values())
 
         if remaining > 0:
             db.rollback()
