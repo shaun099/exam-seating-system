@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
 import { Badge } from "../../ui/badge"
-import { CheckCircle2, FileText, ArrowLeft, X, FileSpreadsheet } from "lucide-react"
+import { CheckCircle2, FileText, FileSpreadsheet } from "lucide-react"
 
 interface PreviewProps {
   payload: any
