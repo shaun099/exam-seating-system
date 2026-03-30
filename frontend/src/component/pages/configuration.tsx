@@ -30,6 +30,33 @@ interface RoomConfig {
   totalCapacity: number;
 }
 
+const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix";
+
+interface SeatingDefaultMatrix {
+  rows: number;
+  cols: number;
+}
+
+const getSavedSeatingDefaults = (): SeatingDefaultMatrix => {
+  const fallback: SeatingDefaultMatrix = { rows: 6, cols: 5 };
+
+  try {
+    const raw = localStorage.getItem(SEATING_DEFAULTS_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as Partial<SeatingDefaultMatrix>;
+    const rows = Number(parsed.rows);
+    const cols = Number(parsed.cols);
+
+    return {
+      rows: Number.isFinite(rows) && rows > 0 ? rows : fallback.rows,
+      cols: Number.isFinite(cols) && cols > 0 ? cols : fallback.cols,
+    };
+  } catch {
+    return fallback;
+  }
+};
+
 // Mock data — in the future, fetch from room-config page
 const mockRooms: RoomConfig[] = [
   {
@@ -77,11 +104,12 @@ const mockRooms: RoomConfig[] = [
 ];
 
 export function Configurations() {
+  const savedDefaults = getSavedSeatingDefaults();
   const [useRoomBased, setUseRoomBased] = useState(false);
 
   const [config, setConfig] = useState({
-    defaultRows: 6,
-    defaultColumns: 5,
+    defaultRows: savedDefaults.rows,
+    defaultColumns: savedDefaults.cols,
     maxCapacity: 30,
   });
 
@@ -105,6 +133,14 @@ export function Configurations() {
   };
 
   const handleSave = () => {
+    localStorage.setItem(
+      SEATING_DEFAULTS_STORAGE_KEY,
+      JSON.stringify({
+        rows: config.defaultRows,
+        cols: config.defaultColumns,
+      }),
+    );
+
     if (useRoomBased) {
       console.log("Room-based configuration saved:", roomConfigs);
     } else {

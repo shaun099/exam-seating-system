@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -13,7 +13,6 @@ import {
 } from "../ui/dialog";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
-import { Progress } from "../ui/progress";
 import {
   Building2,
   CheckCircle2,
@@ -35,127 +34,302 @@ interface Semester {
   slots: Slot[];
 }
 
-const initialSemesters: Semester[] = [
-  {
-    id: "s2",
-    name: "S2",
-    slots: [
-      { id: "s2-a", name: "Slot A", status: "completed" },
-      { id: "s2-b", name: "Slot B", status: "completed" },
-      { id: "s2-c", name: "Slot C", status: "completed" },
-      { id: "s2-d", name: "Slot D", status: "completed" },
-      { id: "s2-e", name: "Slot E", status: "pending" },
-      { id: "s2-f", name: "Slot F", status: "pending" },
-    ],
-  },
-  {
-    id: "s4",
-    name: "S4",
-    slots: [
-      { id: "s4-a", name: "Slot A", status: "pending" },
-      { id: "s4-b", name: "Slot B", status: "pending" },
-      { id: "s4-c", name: "Slot C", status: "pending" },
-      { id: "s4-d", name: "Slot D", status: "pending" },
-      { id: "s4-e", name: "Slot E", status: "pending" },
-      { id: "s4-f", name: "Slot F", status: "pending" },
-    ],
-  },
-  {
-    id: "s6",
-    name: "S6",
-    slots: [
-      { id: "s6-a", name: "Slot A", status: "pending" },
-      { id: "s6-b", name: "Slot B", status: "pending" },
-      { id: "s6-c", name: "Slot C", status: "pending" },
-      { id: "s6-d", name: "Slot D", status: "pending" },
-      { id: "s6-e", name: "Slot E", status: "pending" },
-      { id: "s6-f", name: "Slot F", status: "pending" },
-    ],
-  },
+interface ExamApiItem {
+  exam_id: number;
+  event_name: string;
+  semester: string;
+  date: string;
+  session: string;
+  available_slots: string[];
+}
+
+interface ExamApiResponse {
+  success: boolean;
+  data: ExamApiItem[];
+  count: number;
+}
+
+const SLOT_ORDER = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z",
 ];
 
-type ModalState = "none" | "room-config" | "progress";
+const getSlotSortValue = (slot: string) => {
+  const idx = SLOT_ORDER.indexOf(slot);
+  return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+};
+
+const EXAMS_ENDPOINT = "http://127.0.0.1:8000/api/v1/exams/";
+const ALLOCATE_ENDPOINT = "http://127.0.0.1:8000/api/v1/allocate/";
+const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix";
+
+interface AllocateRequestPayload {
+  slot: string;
+  rows: number;
+  cols: number;
+}
+
+interface AllocateApiResponse {
+  success?: boolean;
+}
+
+interface SeatingDefaultMatrix {
+  rows: number;
+  cols: number;
+}
+
+const toSemesterData = (apiData: ExamApiItem[]): Semester[] => {
+  const semesterMap = new Map<string, Set<string>>();
+
+  for (const item of apiData) {
+    const semesterName = item.semester.trim().toUpperCase();
+    if (!semesterName) continue;
+
+    if (!semesterMap.has(semesterName)) {
+      semesterMap.set(semesterName, new Set<string>());
+    }
+
+    const slotSet = semesterMap.get(semesterName)!;
+    for (const slot of item.available_slots ?? []) {
+      const normalizedSlot = slot.trim().toUpperCase();
+      if (normalizedSlot) {
+        slotSet.add(normalizedSlot);
+      }
+    }
+  }
+
+  return Array.from(semesterMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([semesterName, slotSet]) => {
+      const semesterId = semesterName.toLowerCase();
+      const sortedSlots = Array.from(slotSet).sort((a, b) => {
+        const slotDiff = getSlotSortValue(a) - getSlotSortValue(b);
+        return slotDiff !== 0 ? slotDiff : a.localeCompare(b);
+      });
+
+      return {
+        id: semesterId,
+        name: semesterName,
+        slots: sortedSlots.map((slot) => ({
+          id: `${semesterId}-${slot.toLowerCase()}`,
+          name: `Slot ${slot}`,
+          status: "pending" as const,
+        })),
+      };
+    });
+};
+
+const mergeSlotStatuses = (
+  freshData: Semester[],
+  currentData: Semester[],
+): Semester[] => {
+  const statusMap = new Map<string, Slot["status"]>();
+
+  for (const semester of currentData) {
+    for (const slot of semester.slots) {
+      statusMap.set(slot.id, slot.status);
+    }
+  }
+
+  return freshData.map((semester) => ({
+    ...semester,
+    slots: semester.slots.map((slot) => ({
+      ...slot,
+      status: statusMap.get(slot.id) ?? slot.status,
+    })),
+  }));
+};
+
+const getSlotValue = (slotName: string) =>
+  slotName
+    .replace(/^slot\s+/i, "")
+    .trim()
+    .toUpperCase();
+
+const getAllocationMatrix = (): SeatingDefaultMatrix => {
+  const fallback: SeatingDefaultMatrix = { rows: 6, cols: 5 };
+
+  try {
+    const raw = localStorage.getItem(SEATING_DEFAULTS_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as Partial<SeatingDefaultMatrix>;
+    const rows = Number(parsed.rows);
+    const cols = Number(parsed.cols);
+
+    return {
+      rows: Number.isFinite(rows) && rows > 0 ? rows : fallback.rows,
+      cols: Number.isFinite(cols) && cols > 0 ? cols : fallback.cols,
+    };
+  } catch {
+    return fallback;
+  }
+};
+
+type ModalState = "none" | "room-config";
+type AllocationStatus = "idle" | "loading" | "success" | "error";
 
 interface SeatingAllocationProps {
   onNavigate?: (page: string) => void;
+  examResponse?: ExamApiResponse | null;
 }
 
-export function SeatingAllocation({ onNavigate }: SeatingAllocationProps) {
+export function SeatingAllocation({
+  onNavigate,
+  examResponse,
+}: SeatingAllocationProps) {
   const [activeModal, setActiveModal] = useState<ModalState>("none");
   const [roomOption, setRoomOption] = useState("default");
-  const [progress, setProgress] = useState(0);
-  const [progressLogs, setProgressLogs] = useState<string[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const selectedSlotRef = useRef<string | null>(null);
+  const [allocationStatus, setAllocationStatus] =
+    useState<AllocationStatus>("idle");
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [semesterData, setSemesterData] = useState<Semester[]>(() => {
-    const saved = localStorage.getItem("semesterData");
-    return saved ? JSON.parse(saved) : initialSemesters;
+    if (examResponse?.success && examResponse.data?.length) {
+      return toSemesterData(examResponse.data);
+    }
+
+    return [];
   });
+
+  useEffect(() => {
+    if (examResponse?.success && examResponse.data?.length) {
+      setSemesterData(toSemesterData(examResponse.data));
+    }
+  }, [examResponse]);
+
+  useEffect(() => {
+    if (examResponse) return;
+
+    const controller = new AbortController();
+
+    const fetchExamData = async () => {
+      try {
+        const response = await fetch(EXAMS_ENDPOINT, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch exams: ${response.status}`);
+        }
+
+        const payload = (await response.json()) as ExamApiResponse;
+        if (payload.success && payload.data?.length) {
+          const transformedData = toSemesterData(payload.data);
+          setSemesterData((prev) => mergeSlotStatuses(transformedData, prev));
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Failed to load exam slot data", error);
+      }
+    };
+
+    void fetchExamData();
+
+    return () => controller.abort();
+  }, [examResponse]);
 
   // Persist semester data to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("semesterData", JSON.stringify(semesterData));
   }, [semesterData]);
 
-  // Keep ref in sync with state
-  useEffect(() => {
-    selectedSlotRef.current = selectedSlot;
-  }, [selectedSlot]);
+  const closeRoomConfigModal = () => {
+    setActiveModal("none");
+    setSelectedSlot(null);
+    setAllocationStatus("idle");
+  };
 
-  const handleSlotClick = (slotId: string, status: string) => {
-    if (status === "completed") return;
-    setSelectedSlot(slotId);
+  const sendAllocateRequest = async (
+    payload: AllocateRequestPayload,
+  ): Promise<boolean> => {
+    try {
+      console.log("Allocate request payload:", payload);
+
+      const response = await fetch(ALLOCATE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) return false;
+
+      const responseData =
+        ((await response.json()) as AllocateApiResponse) ?? null;
+      if (typeof responseData?.success === "boolean") {
+        return responseData.success;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to send allocation request", error);
+      return false;
+    }
+  };
+
+  const handleSlotClick = (slot: Slot) => {
+    if (slot.status === "completed") return;
+
+    setSelectedSlot(slot);
+    setAllocationStatus("idle");
     setActiveModal("room-config");
   };
 
-  const handleContinueAllocation = () => {
-    setActiveModal("progress");
-    setProgress(0);
-    setProgressLogs([]);
-  };
+  const handleAllocateFromModal = async () => {
+    if (!selectedSlot) return;
 
-  useEffect(() => {
-    if (activeModal === "progress") {
-      const logs = [
-        "Initializing allocation process...",
-        "Processing Slot A students...",
-        "Assigning CS students to Room 201...",
-        "Assigning EC students to Room 202...",
-        "Assigning ME students to Room 203...",
-        "Applying department interleaving...",
-        "Verifying seat assignments...",
-        "Generating seating matrix...",
-        "Allocation completed successfully!",
-      ];
+    const matrix = getAllocationMatrix();
+    const payload: AllocateRequestPayload = {
+      slot: getSlotValue(selectedSlot.name),
+      rows: matrix.rows,
+      cols: matrix.cols,
+    };
 
-      let currentLog = 0;
-      const interval = setInterval(() => {
-        if (currentLog < logs.length) {
-          setProgressLogs((prev) => [...prev, logs[currentLog]]);
-          setProgress(((currentLog + 1) / logs.length) * 100);
-          currentLog++;
-        } else {
-          clearInterval(interval);
-          // Mark the selected slot as completed immediately
-          const slotId = selectedSlotRef.current;
-          if (slotId) {
-            setSemesterData((prev) =>
-              prev.map((semester) => ({
-                ...semester,
-                slots: semester.slots.map((slot) =>
-                  slot.id === slotId
-                    ? { ...slot, status: "completed" as const }
-                    : slot,
-                ),
-              })),
-            );
-          }
-        }
-      }, 500);
+    setAllocationStatus("loading");
+    const isSuccessful = await sendAllocateRequest(payload);
 
-      return () => clearInterval(interval);
+    if (isSuccessful) {
+      setAllocationStatus("success");
+      setSemesterData((prev) =>
+        prev.map((semester) => ({
+          ...semester,
+          slots: semester.slots.map((slot) =>
+            slot.id === selectedSlot.id
+              ? { ...slot, status: "completed" as const }
+              : slot,
+          ),
+        })),
+      );
+      return;
     }
-  }, [activeModal]);
+
+    setAllocationStatus("error");
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -202,11 +376,11 @@ export function SeatingAllocation({ onNavigate }: SeatingAllocationProps) {
                 Semester {semester.name}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="p-4 space-y-3 max-h-96 overflow-y-auto pr-2">
               {semester.slots.map((slot) => (
                 <div
                   key={slot.id}
-                  onClick={() => handleSlotClick(slot.id, slot.status)}
+                  onClick={() => handleSlotClick(slot)}
                   className={`p-4 rounded-lg border flex items-center justify-between transition-colors ${
                     slot.status === "completed"
                       ? "bg-emerald-50 border-emerald-200 cursor-default"
@@ -227,135 +401,111 @@ export function SeatingAllocation({ onNavigate }: SeatingAllocationProps) {
       {/* Room Configuration Modal */}
       <Dialog
         open={activeModal === "room-config"}
-        onOpenChange={() => setActiveModal("none")}
+        onOpenChange={(open) => {
+          if (!open) closeRoomConfigModal();
+        }}
       >
         <DialogContent className="sm:max-w-md bg-white">
           <DialogHeader>
             <DialogTitle className="text-black">Room Configuration</DialogTitle>
             <DialogDescription className="text-gray-500">
-              Do you want to use the Default Seating Plan?
+              {selectedSlot
+                ? `Do you want to allocate ${selectedSlot.name}?`
+                : "Do you want to use the Default Seating Plan?"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <RadioGroup value={roomOption} onValueChange={setRoomOption}>
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
-                <RadioGroupItem
-                  value="default"
-                  id="default"
-                  className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor="default"
-                    className="cursor-pointer font-medium text-black"
-                  >
-                    Use Default List
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-1">
-                    30 Rooms Available - Pre-configured seating plan
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
-                <RadioGroupItem
-                  value="custom"
-                  id="custom"
-                  className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor="custom"
-                    className="cursor-pointer font-medium text-black"
-                  >
-                    Create New Plan
-                  </Label>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Upload a custom room configuration CSV
-                  </p>
-                  {roomOption === "custom" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 bg-transparent"
+            {allocationStatus === "idle" && (
+              <RadioGroup value={roomOption} onValueChange={setRoomOption}>
+                <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+                  <RadioGroupItem
+                    value="default"
+                    id="default"
+                    className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
+                  />
+                  <div className="flex-1">
+                    <Label
+                      htmlFor="default"
+                      className="cursor-pointer font-medium text-black"
                     >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Room CSV
-                    </Button>
-                  )}
+                      Use Default List
+                    </Label>
+                    <p className="text-sm text-gray-500 mt-1">
+                      30 Rooms Available - Pre-configured seating plan
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </RadioGroup>
+                <div className="flex items-start space-x-3 p-4 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+                  <RadioGroupItem
+                    value="custom"
+                    id="custom"
+                    className="border-blue-500 text-blue-600 data-[state=checked]:bg-blue-600"
+                  />
+                  <div className="flex-1">
+                    <Label
+                      htmlFor="custom"
+                      className="cursor-pointer font-medium text-black"
+                    >
+                      Create New Plan
+                    </Label>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload a custom room configuration CSV
+                    </p>
+                    {roomOption === "custom" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 bg-transparent"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Room CSV
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+            )}
+
+            {allocationStatus === "success" && (
+              <p className="text-sm text-emerald-600">Allocation successful.</p>
+            )}
+            {allocationStatus === "error" && (
+              <p className="text-sm text-red-600">Allocation failed.</p>
+            )}
           </div>
           <div className="flex justify-end">
-            <Button
-              onClick={handleContinueAllocation}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              Continue Allocation
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Allocation Progress Modal */}
-      <Dialog open={activeModal === "progress"} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-lg bg-white" hideClose>
-          <DialogHeader>
-            <DialogTitle className="text-black">
-              {progress === 100
-                ? "Allocation Complete!"
-                : "Allocating Students..."}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Progress</span>
-                <span className="font-medium text-black">
-                  {Math.round(progress)}%
-                </span>
-              </div>
-              <Progress value={progress} className="h-3" />
-            </div>
-            <div className="bg-gray-100 rounded-lg p-4 max-h-48 overflow-y-auto font-mono text-sm space-y-1">
-              {progressLogs.map((log, index) => (
-                <div key={`log-${index}`} className="flex items-center gap-2">
-                  {progress === 100 && index === progressLogs.length - 1 ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  ) : (
-                    <span className="w-4 h-4 flex items-center justify-center text-gray-500 flex-shrink-0">
-                      &gt;
-                    </span>
-                  )}
-                  <span
-                    className={
-                      index === progressLogs.length - 1 && progress === 100
-                        ? "text-emerald-600"
-                        : "text-black"
-                    }
-                  >
-                    {log}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          {progress === 100 && (
-            <div className="flex justify-end">
+            {(allocationStatus === "idle" ||
+              allocationStatus === "loading") && (
+              <Button
+                onClick={handleAllocateFromModal}
+                disabled={allocationStatus === "loading" || !selectedSlot}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                {allocationStatus === "loading" ? "Allocating..." : "Allocate"}
+              </Button>
+            )}
+            {allocationStatus === "success" && (
               <Button
                 onClick={() => {
-                  setActiveModal("none");
-                  setSelectedSlot(null);
+                  closeRoomConfigModal();
                   onNavigate?.("reports");
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <FileText className="w-4 h-4 mr-2" />
-                Generate Final Report
+                Generate PDF
               </Button>
-            </div>
-          )}
+            )}
+            {allocationStatus === "error" && (
+              <Button
+                onClick={closeRoomConfigModal}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Retry
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
