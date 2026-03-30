@@ -9,6 +9,7 @@ from app.routes.healthy import router as health_router
 from app.routes.upload import router as upload_router
 from app.routes.allocate import router as allocate_router
 from app.routes.download import router as download_router
+from app.routes.exams import router as exams_router
 from app.db.database import Base, engine
 from app.routes import auth, admin
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,8 +27,7 @@ from app.models import (
     Room,
 )
 
-# ✅ CREATE APP FIRST
-app = FastAPI(
+app=FastAPI(
     title="EXAM SEATING ALLOCATION API",
     description="Backend API for exam seating arrangement system",
     version="1.0.0"
@@ -62,5 +62,7 @@ v1_router.include_router(health_router)
 v1_router.include_router(upload_router)
 v1_router.include_router(allocate_router)
 v1_router.include_router(download_router)
+v1_router.include_router(exams_router)
+
 
 app.include_router(v1_router)
