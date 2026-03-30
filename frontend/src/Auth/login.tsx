@@ -24,6 +24,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
   const [confirmPassword, setConfirmPassword] = useState("")
   const [signupEmailValid, setSignupEmailValid] = useState<boolean | null>(null)
 
+  const API_BASE = import.meta.env.VITE_API_URL
   // Must contain at least one alphabet before @
   const validateEmail = (value: string) => {
     const pattern = /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/
@@ -50,50 +51,84 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
     }
   }
 
-  const handleLoginClick = () => {
-    const cleanedEmail = email.trim().toLowerCase()
-    const cleanedPassword = password.trim()
+  const handleLoginClick = async () => {
+  const cleanedEmail = email.trim().toLowerCase()
+  const cleanedPassword = password.trim()
 
-    if (!validateEmail(cleanedEmail)) {
-      alert("Invalid email format")
-      return
-    }
+  if (!validateEmail(cleanedEmail)) {
+    alert("Invalid email format")
+    return
+  }
 
-    if (cleanedPassword !== "adminpass") {
-      alert("Wrong password")
-      return
-    }
+  try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: cleanedEmail,
+          password: cleanedPassword
+        })
+      })
 
-    if (cleanedEmail === "admin@sjcetpalai.ac.in") {
-      onLogin('admin')
-    } else {
-      onLogin('staff')
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(JSON.stringify(data.detail || "Login failed"))
+        return
+      }
+
+      // store token
+      localStorage.setItem("token", data.access_token)
+
+      // redirect using your existing function
+      onLogin(data.role)
+
+    } catch (err) {
+      alert("Server error")
     }
   }
 
-  const handleSignup = () => {
-    if (!signupName.trim()) {
-      alert("Enter full name")
-      return
-    }
-
-    if (!validateEmail(signupEmail.trim())) {
-      alert("Invalid email format")
-      return
-    }
-
-    if (signupPassword !== confirmPassword) {
-      alert("Passwords do not match")
-      return
-    }
-
-    if (signupPassword.trim() === "") {
-      alert("Enter password")
-      return
-    }
-
-    alert("Account Created (mock)")
+  const handleSignup = async () => {
+  if (!signupName.trim()) {
+    alert("Enter full name")
+    return
   }
+
+  if (!validateEmail(signupEmail.trim())) {
+    alert("Invalid email format")
+    return
+  }
+
+  if (signupPassword !== confirmPassword) {
+    alert("Passwords do not match")
+    return
+  }
+
+  try {
+      const res = await fetch(`${API_BASE}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signupEmail.trim(),
+          password: signupPassword,
+          full_name: signupName.trim()
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(JSON.stringify(data.detail || "Login failed"))
+        return
+      }
+
+      alert("Signup successful. Wait for admin approval.")
+      setActiveTab("login")
+
+    } catch (err) {
+      alert("Server error")
+    }
+  }  
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (e.key === "Enter") {
