@@ -27,16 +27,16 @@ app=FastAPI(
 )
 
 origins = [
-    "http://localhost:5173",   # Vite (React)
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,        # Who can access
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],          # GET, POST, PUT, DELETE, etc.
-    allow_headers=["*"],          # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 # Base.metadata.drop_all(bind=engine, tables=[
 #     SeatAllocation.__table__,
