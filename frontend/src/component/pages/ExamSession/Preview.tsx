@@ -1,144 +1,97 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/component/ui/card"
-import { Button } from "@/component/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/component/ui/table"
-import { Badge } from "@/component/ui/badge"
-import { CheckCircle2, AlertCircle, ArrowLeft, Sparkles } from "lucide-react"
-import type { StudentRow } from "./ExamSessionWizard"
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
+import { Button } from "../../ui/button"
+import { Badge } from "../../ui/badge"
+import { CheckCircle2, FileText, ArrowLeft, X, FileSpreadsheet } from "lucide-react"
 
-interface DataPreviewProps {
-  data: StudentRow[]
+interface PreviewProps {
+  payload: any
   onBack: () => void
-  onGenerate: () => void
   onCancel: () => void
+  onGenerate: () => void 
 }
 
-export function DataPreview({
-  data,
-  onBack,
-  onGenerate,
-  onCancel,
-}: DataPreviewProps) {
-  const validCount = data.filter((row) => row.valid).length
-  const errorCount = data.filter((row) => !row.valid).length
+export default function Preview({ payload, onBack, onCancel, onGenerate }: PreviewProps) {
+  const typeLabels: Record<string, string> = {
+    ktu_university: "KTU Batch List",
+    internal: "Internal Exam",
+    autonomous: "Autonomous University"
+  }
+
+  const isInternal = payload.type === "internal";
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="w-full max-w-4xl mx-auto shadow-sm">
+      <CardHeader className="border-b bg-muted/10">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-xl">Data Preview</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Review the uploaded data before generating the seating plan
-            </p>
+            <CardTitle className="text-xl flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              Import Preview
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Verify file mappings before generation</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              <span className="text-sm font-medium text-foreground">
-                {validCount} Valid
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-500" />
-              <span className="text-sm font-medium text-foreground">
-                {errorCount} Errors
-              </span>
-            </div>
-          </div>
+          <Badge variant="outline" className="bg-background px-3 py-1 capitalize font-bold">
+            {typeLabels[payload.type]}
+          </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Reg No</TableHead>
-                <TableHead className="font-semibold">Name</TableHead>
-                <TableHead className="font-semibold">Subject</TableHead>
-                <TableHead className="font-semibold">Slot</TableHead>
-                <TableHead className="font-semibold text-center">
-                  Status
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((row, index) => (
-                <TableRow
-                  key={`row-${row.regNo}-${index}`}
-                  className={!row.valid ? "bg-red-50" : ""}
-                >
-                  <TableCell className="font-mono text-sm">
-                    {row.regNo || (
-                      <span className="text-red-500 italic">Missing</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{row.name}</TableCell>
-                  <TableCell>
-                    {row.subject || (
-                      <span className="text-red-500 italic">Missing</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-medium">
-                      Slot {row.slot}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {row.valid ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" />
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <span className="text-xs text-red-600">
-                          {row.error}
-                        </span>
+      <CardContent className="py-6 space-y-6">
+        <div className="space-y-4">
+          {payload.data ? (
+            payload.data.map((item: any, i: number) => (
+              <div key={i} className="border rounded-xl overflow-hidden bg-background shadow-sm">
+                <div className="bg-slate-50 border-b p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-sm font-semibold text-slate-900 truncate">{item.file.name}</span>
+                  </div>
+                </div>
+
+                <div className={`p-5 grid grid-cols-1 md:grid-cols-${isInternal ? 3 : 1} gap-8`}>
+                  <div className="space-y-1">
+                    <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Course</p>
+                    <p className="text-base font-normal text-slate-900">{item.subjectName}-{item.subjectCode}</p>
+                  </div>
+                  {isInternal && (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Department & Class</p>
+                        <p className="text-base font-normal text-slate-900">{item.dept}-{item.division}</p>
                       </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      <div className="space-y-1">
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Semester</p>
+                        <p className="text-base font-normal text-slate-900">{item.semester || "—"}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            payload.files?.map((file: File, i: number) => (
+              <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                  <span className="text-sm font-medium">{file.name}</span>
+                </div>
+                <Badge variant="outline" className="font-bold">KTU List</Badge>
+              </div>
+            ))
+          )}
         </div>
 
-        {errorCount > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p className="text-sm text-amber-800">
-              <strong>Note:</strong> {errorCount} row(s) have errors and will
-              be skipped during allocation. You can go back and fix the CSV
-              file, or proceed with valid entries only.
-            </p>
-          </div>
-        )}
-
-        <div className="flex justify-between pt-4 border-t">
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            <Button variant="ghost" onClick={onCancel}>
-              Cancel
+        <div className="flex justify-between items-center pt-6 border-t mt-8">
+          <Button variant="ghost" onClick={onCancel} className="text-slate-500">Discard</Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onBack}>Edit Tags</Button>
+            {/* ✅ This button now triggers the route to "seating" in App.tsx */}
+            <Button onClick={onGenerate} className="bg-slate-800 hover:bg-slate-900 text-white px-8">
+              Confirm & Generate
             </Button>
           </div>
-
-          <Button
-            onClick={onGenerate}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            Generate Seating Plan
-          </Button>
         </div>
       </CardContent>
     </Card>

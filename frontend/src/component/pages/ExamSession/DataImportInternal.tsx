@@ -6,58 +6,54 @@ import { Button } from "../../ui/button"
 import { Upload, FileSpreadsheet, ArrowLeft, ArrowRight, Trash2 } from "lucide-react"
 import { Input } from "../../ui/input"
 
-interface AutoFileEntry {
+interface FileWithTags {
   id: string
   file: File
   subjectName: string
   subjectCode: string
+  dept: string
+  division: string
+  semester: string
 }
 
-export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: any) => void; onBack: () => void }) {
+export function DataImportInternal({ onUpload, onBack }: { onUpload: (data: any) => void; onBack: () => void }) {
   const [isDragging, setIsDragging] = useState(false)
-  const [fileEntries, setFileEntries] = useState<AutoFileEntry[]>([])
+  const [fileEntries, setFileEntries] = useState<FileWithTags[]>([])
 
   const processFiles = (files: File[]) => {
     const newEntries = files.map(f => ({
       id: Math.random().toString(36).substring(7),
       file: f,
       subjectName: "",
-      subjectCode: ""
+      subjectCode: "",
+      dept: "",
+      division: "",
+      semester: ""
     }))
     setFileEntries(prev => [...prev, ...newEntries])
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
+    e.preventDefault(); setIsDragging(false)
     const dropped = Array.from(e.dataTransfer.files).filter(f => /\.(csv|xlsx|xls)$/i.test(f.name))
     processFiles(dropped)
   }, [])
 
-  const updateTag = (id: string, field: keyof AutoFileEntry, value: string) => {
+  const updateTag = (id: string, field: keyof FileWithTags, value: string) => {
     setFileEntries(prev => prev.map(entry => entry.id === id ? { ...entry, [field]: value } : entry))
   }
 
   const removeFile = (id: string) => setFileEntries(prev => prev.filter(e => e.id !== id))
 
-  const handleContinue = () => {
-    onUpload({
-      type: "autonomous",
-      data: fileEntries // Passes the files linked with their specific tags
-    })
-  }
-
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-xl">Autonomous University Upload</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Upload spreadsheets and tag course details for each file
-        </p>
+        <CardTitle className="text-xl">Internal Exam Upload</CardTitle>
+        <p className="text-sm text-muted-foreground">Upload files and tag specific details for each</p>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Cloned UI Dropzone */}
+        {/* Image Clone UI: Dropzone */}
         <div
           onDrop={handleDrop}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
@@ -72,19 +68,12 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
             </div>
             <div>
               <p className="font-medium text-lg">Upload Student Data</p>
-              <p className="text-sm text-muted-foreground">
-                Drag and drop your files here, or click to browse
-              </p>
+              <p className="text-sm text-muted-foreground">Drag and drop your files here, or click to browse</p>
             </div>
-            <input 
-              type="file" 
-              multiple 
-              accept=".csv,.xlsx,.xls" 
-              className="hidden" 
-              id="auto-file-input" 
+            <input type="file" multiple accept=".csv,.xlsx,.xls" className="hidden" id="file-input" 
               onChange={(e) => processFiles(Array.from(e.target.files || []))} 
             />
-            <label htmlFor="auto-file-input">
+            <label htmlFor="file-input">
               <Button variant="outline" asChild className="cursor-pointer">
                 <span>Browse Files</span>
               </Button>
@@ -99,45 +88,32 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-emerald-600">
                   <FileSpreadsheet className="w-4 h-4" />
-                  <span className="text-sm font-semibold truncate max-w-md">
-                    {entry.file.name}
-                  </span>
+                  <span className="text-sm font-semibold truncate max-w-xs">{entry.file.name}</span>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => removeFile(entry.id)}>
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </Button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Input 
-                    placeholder="Course Name" 
-                    value={entry.subjectName} 
-                    onChange={e => updateTag(entry.id, "subjectName", e.target.value)} 
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Input 
-                    placeholder="Course Code" 
-                    value={entry.subjectCode} 
-                    onChange={e => updateTag(entry.id, "subjectCode", e.target.value)} 
-                  />
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Input placeholder="Course Name" value={entry.subjectName} onChange={e => updateTag(entry.id, "subjectName", e.target.value)} />
+                <Input placeholder="Course Code" value={entry.subjectCode} onChange={e => updateTag(entry.id, "subjectCode", e.target.value)} />
+                <Input placeholder="Department" value={entry.dept} onChange={e => updateTag(entry.id, "dept", e.target.value)} />
+                <Input placeholder="Semester" value={entry.semester} onChange={e => updateTag(entry.id, "semester", e.target.value)} />
+                <Input placeholder="Division (e.g. A, B)" value={entry.division} onChange={e => updateTag(entry.id, "division", e.target.value)} />
               </div>
             </div>
           ))}
         </div>
 
-        {/* Navigation Footer */}
+        {/* Footer */}
         <div className="flex justify-between pt-4 border-t">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-
           <Button 
             disabled={fileEntries.length === 0} 
-            onClick={handleContinue}
-            className="bg-gray-500 hover:bg-gray-600 text-white" 
+            onClick={() => onUpload({ type: "internal", data: fileEntries })}
           >
             Preview Data
             <ArrowRight className="w-4 h-4 ml-2" />

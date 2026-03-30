@@ -4,10 +4,9 @@ import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
 import { Upload, FileSpreadsheet, ArrowLeft, ArrowRight } from "lucide-react"
-import type { StudentRow } from "./ExamSessionWizard"
 
 interface DataImportKTUProps {
-  onUpload: (data: StudentRow[]) => void
+  onUpload: (data: { type: string; files: File[] }) => void
   onBack: () => void
 }
 
@@ -20,8 +19,10 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
     setIsDragging(false)
 
     const dropped = e.dataTransfer.files
-    if (dropped.length > 0 && dropped[0].name.endsWith(".csv")) {
-      setFile(dropped[0])
+    const f = dropped[0]
+
+    if (f && /\.(csv|xlsx|xls)$/i.test(f.name)) {
+      setFile(f)
     }
   }, [])
 
@@ -37,23 +38,19 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return
     const selected = e.target.files[0]
-    if (selected.name.endsWith(".csv")) {
+
+    if (/\.(csv|xlsx|xls)$/i.test(selected.name)) {
       setFile(selected)
     }
   }
 
   const handleContinue = () => {
-    const mockData: StudentRow[] = [
-      {
-        regNo: "KTU001",
-        name: "Sample Student",
-        subject: "Imported From CSV",
-        slot: "A",
-        valid: true,
-      },
-    ]
+    if (!file) return
 
-    onUpload(mockData)
+    onUpload({
+      type: "ktu_university",
+      files: [file]
+    })
   }
 
   return (
@@ -61,13 +58,13 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
       <CardHeader>
         <CardTitle className="text-xl">KTU Batch Appearance List</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Upload the consolidated CSV file
+          Upload the consolidated file
         </p>
       </CardHeader>
 
       <CardContent className="space-y-6">
 
-        {/* Drag & Drop */}
+        {/* 🔥 YOUR ORIGINAL UI — UNTOUCHED */}
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -109,7 +106,7 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
 
               <div>
                 <p className="font-medium text-foreground">
-                  Upload Student Data CSV
+                  Upload Student Data
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Drag and drop your file here, or click to browse
@@ -118,7 +115,7 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
 
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleFileSelect}
                 className="hidden"
                 id="ktu-upload"
@@ -132,6 +129,8 @@ export function DataImportKTU({ onUpload, onBack }: DataImportKTUProps) {
             </div>
           )}
         </div>
+
+        {/* 🔽 NOTHING EXTRA FOR KTU UNIVERSITY */}
 
         {/* Navigation */}
         <div className="flex justify-between pt-4 border-t">
