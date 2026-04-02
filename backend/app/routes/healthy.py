@@ -10,6 +10,7 @@ router = APIRouter(
 @router.get("/", summary="Health check")
 def health_check():
     return {
+        "success": True,
+        "message": "Exam Seating Allocation API is running",
         "status": "healthy",
-        "message": "Exam Seating Allocation API is running"
     }
