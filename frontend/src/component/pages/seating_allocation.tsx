@@ -18,8 +18,8 @@ import { RoomConfigurationModal } from "./RoomConfigurationModal.tsx";
 // Constants
 // ---------------------------------------------------------------------------
 
-const EXAMS_ENDPOINT = "http://127.0.0.1:8000/api/v1/exams/";
-const ALLOCATE_ENDPOINT = "http://127.0.0.1:8000/api/v1/allocate/";
+const EXAMS_ENDPOINT = `${import.meta.env.VITE_API_URL}/api/v1/exams/`;
+const ALLOCATE_ENDPOINT = `${import.meta.env.VITE_API_URL}/api/v1/allocate/`;
 const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix";
 const SLOT_STATUS_STORAGE_KEY = "seating-slot-statuses-v2"; // v2 — bumped to invalidate stale shape
 
