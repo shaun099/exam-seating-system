@@ -11,6 +11,7 @@ import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWiza
 import { RoomConfig } from "./component/pages/room-config";
 import { AdminPortal } from "./adminportal/admin";
 import AdminReports from "./adminportal/adminreports";
+import { ClassMatrixPreview } from "./component/pages/ClassMatrixPreview";
 
 type UserType = "admin" | "staff" | null;
 
@@ -40,6 +41,11 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   ],
 
   reports: [{ label: "Home", href: "/" }, { label: "Reports" }],
+
+  "class-matrix-preview": [
+    { label: "Home", href: "/" },
+    { label: "Class Matrix Preview" },
+  ],  
 
   email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
 };
@@ -102,13 +108,19 @@ function App() {
         return <Configurations />;
 
       case "reports":
-        return <Reports />;
+        return <Reports onNavigate={handleNavigate} />;
+
+      case "class-matrix-preview": {
+        const sem = localStorage.getItem("classMatrix.sem") || "S1";
+        const slot = localStorage.getItem("classMatrix.slot") || "A";
+        return <ClassMatrixPreview sem={sem} slot={slot} onNavigate={handleNavigate} />;
+      }
 
       case "exam-session":
         return (
           <ExamSessionWizard
             onCancel={() => setCurrentPage("dashboard")}
-            onNavigate={handleNavigate} // <-- Add this
+            onNavigate={handleNavigate}
           />
         );
 

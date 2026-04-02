@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.services.class_matrix_service import ClassMatrixService
+from app.schemas.class_matrix import ReplaceRoomPayload
+
 
 router = APIRouter(prefix="/download", tags=["Download"])
 
@@ -34,6 +36,21 @@ def download_class_matrix(sem: str, slot: str, db: Session = Depends(get_db)):
             status_code=500,
             content={"success": False, "message": f"Failed to download class matrix: {str(e)}"},
         )
+
+@router.get("/classMatrix/preview/{sem}/{slot}")
+def preview_class_matrix(sem: str, slot: str, db: Session = Depends(get_db)):
+    base_exam_payload, rows, allocation_event_map = (
+        ClassMatrixService._fetch_room_rows_for_sem_slot(sem=sem, slot=slot, db=db)
+    )
+    room_payloads = ClassMatrixService._build_room_payloads(
+        base_exam_payload, rows, allocation_event_map
+    )
+    return ClassMatrixService.build_preview_response(room_payloads, base_exam_payload)
+
+@router.post("/classMatrix/replace-room")
+def replace_room(payload: ReplaceRoomPayload, db: Session = Depends(get_db)):
+    ClassMatrixService.replace_room(payload, db)
+    return {"success": True}
 
 
 @router.get("/attendencesheet/{sem}/{slot}")

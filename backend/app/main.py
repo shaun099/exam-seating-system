@@ -6,8 +6,8 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 from fastapi import FastAPI, APIRouter  # type: ignore
 from app.routes.healthy import router as health_router
+from app.routes.allocate import router as allocate_router, seat_allocations_router
 from app.routes.upload import router as upload_router
-from app.routes.allocate import router as allocate_router
 from app.routes.download import router as download_router
 from app.routes.exams import router as exams_router
 from app.db.database import Base, engine
@@ -73,6 +73,6 @@ v1_router.include_router(upload_router)
 v1_router.include_router(allocate_router)
 v1_router.include_router(download_router)
 v1_router.include_router(exams_router)
-
+v1_router.include_router(seat_allocations_router)
 
 app.include_router(v1_router)

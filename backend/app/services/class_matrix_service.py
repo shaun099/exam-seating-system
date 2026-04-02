@@ -16,6 +16,7 @@ from app.models.exam import Exam
 from app.models.room import Room
 from app.models.seat_allocation import SeatAllocation
 from app.models.student import Student
+from app.schemas.class_matrix import ReplaceRoomPayload   # add this to your imports at top
 
 # Colors for alternating course groups within a mixed column
 MIXED_COL_COLORS = [
@@ -52,6 +53,14 @@ class ClassMatrixService:
     def _extract_sem(event_name: str) -> str | None:
         match = re.search(r"\bS\d+\b", event_name.upper())
         return match.group(0) if match else None
+
+    @staticmethod
+    def _format_course_code(code: str) -> str:
+        """Insert a space between the letter prefix and the numeric suffix.
+        e.g. 'CST202' -> 'CST 202', 'ECT404' -> 'ECT 404'.
+        Codes that are already spaced or don't match are returned unchanged.
+        """
+        return re.sub(r"([A-Za-z]+)(\d+)", r"\1 \2", code.strip())
 
     # ------------------------------------------------------------------
     # DB fetch  -- KEY FIX: fetch ALL allocations for this sem+slot
@@ -253,10 +262,12 @@ class ClassMatrixService:
                     current_code = code
 
             unique_codes = list(dict.fromkeys(seg[1] for seg in segments))
+            fmt = ClassMatrixService._format_course_code
             if len(unique_codes) == 1:
-                course_header_by_col[col_idx] = unique_codes[0]
+                course_header_by_col[col_idx] = fmt(unique_codes[0])
             else:
-                course_header_by_col[col_idx] = " / ".join(unique_codes)
+                # Mixed: newline-separated so PDF renders them stacked
+                course_header_by_col[col_idx] = "\n".join(fmt(c) for c in unique_codes)
                 col_segment_map[col_idx] = segments
 
         return course_header_by_col, student_grid, col_segment_map, total_count, effective_rows
@@ -284,7 +295,26 @@ class ClassMatrixService:
 
         # ── Table rows ────────────────────────────────────────────────────
         header_labels = ["No"] + [ClassMatrixService._col_label(i) for i in range(cols_count)]
-        course_row    = ["1"]  + course_header_by_col
+
+        # Build the course-header row.
+        # Single-code cells stay as plain strings.
+        # Multi-code cells (mixed columns) are rendered as Paragraph objects
+        # so ReportLab wraps them onto separate lines ("CST 202\nECT 404").
+        cell_style = ParagraphStyle(
+            "CourseCell",
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=11,
+            alignment=1,  # centre
+        )
+
+        def _make_course_cell(text: str):
+            if "\n" in text:
+                html = "<br/>".join(text.split("\n"))
+                return Paragraph(html, cell_style)
+            return text
+
+        course_row = ["1"] + [_make_course_cell(h) for h in course_header_by_col]
 
         table_data = [header_labels, course_row]
         for row_idx in range(effective_rows):
@@ -396,6 +426,123 @@ class ClassMatrixService:
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Preview response builder (no PDF, returns JSON)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def build_preview_response(
+        room_payloads: list[dict], base_exam: dict
+    ) -> dict:
+        rooms_out = []
+
+        for rp in room_payloads:
+            room  = rp["room"]
+            cells = rp["cells"]
+            rows_count = max((r for r, _ in cells.keys()), default=0) + 1
+            cols_count = max((c for _, c in cells.keys()), default=0) + 1
+
+            _, _, _, total_count, _ = ClassMatrixService._analyse_columns(
+                cells, rows_count, cols_count
+            )
+
+            # (row, col) tuple keys → "row,col" string keys for JSON
+            cells_out = {
+                f"{r},{c}": {
+                    "reg_no":       v["reg_no"],
+                    "student_name": v["student_name"],
+                    "course_code":  v["course_code"],
+                }
+                for (r, c), v in cells.items()
+            }
+
+            # Unique course codes in row-major order
+            seen: set[str]   = set()
+            courses: list[str] = []
+            for (r, c) in sorted(cells.keys()):
+                code = cells[(r, c)]["course_code"]
+                if code and code not in seen:
+                    seen.add(code)
+                    courses.append(code)
+
+            rooms_out.append({
+                "room_id":     room["id"],
+                "room_number": room["room_number"],
+                "rows":        rows_count,
+                "cols":        cols_count,
+                "event_name":  rp["exam"]["event_name"],
+                "courses":     courses,
+                "cells":       cells_out,
+                "total_count": total_count,
+            })
+
+        return {
+            "event_name": base_exam["event_name"],
+            "date":       base_exam["date"],
+            "sem":        base_exam["sem"],
+            "slot":       base_exam["slot"],
+            "rooms":      rooms_out,
+        }
+
+    # ------------------------------------------------------------------
+    # Replace room  (swaps room_id on existing seat rows, no re-shuffle)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def replace_room(payload: ReplaceRoomPayload, db: Session) -> None:
+        normalized_sem  = payload.sem.strip().upper()
+        normalized_slot = payload.slot.strip().upper()
+
+        # 1. Verify the new room exists
+        new_room = (
+            db.query(Room)
+            .filter(Room.room_number == payload.new_room_number.strip())
+            .first()
+        )
+        if new_room is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Room '{payload.new_room_number}' not found. Add it via room management first.",
+            )
+
+        # 2. Resolve allocation_ids for this sem + slot
+        allocations = (
+            db.query(Allocation)
+            .join(Exam, Exam.id == Allocation.exam_id)
+            .filter(Allocation.slot == normalized_slot)
+            .filter(Exam.event_name.ilike(f"%{normalized_sem}%"))
+            .all()
+        )
+        if not allocations:
+            raise HTTPException(
+                status_code=404,
+                detail="No allocation found for this sem/slot.",
+            )
+
+        allocation_ids = [a.id for a in allocations]
+
+        # 3. Fetch every seat row in the old room for this sem/slot
+        old_seats = (
+            db.query(SeatAllocation)
+            .filter(
+                SeatAllocation.room_id == payload.old_room_id,
+                SeatAllocation.allocation_id.in_(allocation_ids),
+            )
+            .all()
+        )
+        if not old_seats:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No seat allocations found for room_id {payload.old_room_id} in this sem/slot.",
+            )
+
+        # 4. Point every seat row at the new room (layout/positions preserved)
+        for seat in old_seats:
+            seat.room_id = new_room.id
+
+        db.commit()
+
 
     @staticmethod
     def get_class_matrix_zip(sem: str, slot: str, db: Session) -> tuple[bytes, str]:
