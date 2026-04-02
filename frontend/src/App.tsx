@@ -14,6 +14,9 @@ import AdminReports from "./adminportal/adminreports";
 
 type UserType = "admin" | "staff" | null;
 
+const AUTH_ROLE_KEY = "userRole";
+const AUTH_TOKEN_KEY = "token";
+
 const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   dashboard: [{ label: "Home", href: "/" }, { label: "Dashboard" }],
 
@@ -42,16 +45,27 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
 };
 
 function App() {
-  const [userType, setUserType] = useState<UserType>(null);
+  const [userType, setUserType] = useState<UserType>(() => {
+    const savedRole = localStorage.getItem(AUTH_ROLE_KEY);
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+
+    if ((savedRole === "admin" || savedRole === "staff") && savedToken) {
+      return savedRole;
+    }
+
+    return null;
+  });
   const [currentPage, setCurrentPage] = useState("dashboard");
- 
-  const handleLogin = (type: 'admin' | 'staff') => {
+
+  const handleLogin = (type: "admin" | "staff") => {
     setUserType(type);
   };
 
   const handleLogout = () => {
     setUserType(null);
     setCurrentPage("dashboard");
+    localStorage.removeItem(AUTH_ROLE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   };
 
   const handleNavigate = (page: string) => {
@@ -64,25 +78,17 @@ function App() {
   }
 
   // Show Admin Portal for admin users
- if (userType === "admin") {
-  if (currentPage === "admin-reports") {
-    return (
-      <AdminReports
-        onLogout={handleLogout}
-        onNavigate={handleNavigate}
-      />
-    );
+  if (userType === "admin") {
+    if (currentPage === "admin-reports") {
+      return (
+        <AdminReports onLogout={handleLogout} onNavigate={handleNavigate} />
+      );
+    }
+
+    // Default admin view
+    return <AdminPortal onLogout={handleLogout} onNavigate={handleNavigate} />;
   }
 
-  // Default admin view
-  return (
-    <AdminPortal
-      onLogout={handleLogout}
-      onNavigate={handleNavigate}
-    />
-  );
-}
-  
   // Staff Portal - render pages based on currentPage
   const renderPage = () => {
     switch (currentPage) {
@@ -99,14 +105,12 @@ function App() {
         return <Reports />;
 
       case "exam-session":
-
-      return (
-        <ExamSessionWizard
-          onCancel={() => setCurrentPage("dashboard")}
-          onNavigate={handleNavigate} // <-- Add this
-        />
-      );
-
+        return (
+          <ExamSessionWizard
+            onCancel={() => setCurrentPage("dashboard")}
+            onNavigate={handleNavigate} // <-- Add this
+          />
+        );
 
       case "email":
         return <EmailNotifications />;

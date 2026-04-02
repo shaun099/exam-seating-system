@@ -1,154 +1,170 @@
-import { useState } from "react"
-import { Button } from "@/component/ui/button"
-import { Card, CardFooter, CardHeader } from "@/component/ui/card"
-import { Input } from "@/component/ui/input"
-import { Label } from "@/component/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/component/ui/tabs"
-import { Mail, Lock, Eye, EyeOff, GraduationCap, CheckCircle, XCircle } from "lucide-react"
+import { useState } from "react";
+import { Button } from "@/component/ui/button";
+import { Card, CardFooter, CardHeader } from "@/component/ui/card";
+import { Input } from "@/component/ui/input";
+import { Label } from "@/component/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/component/ui/tabs";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 
-export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') => void }) {
+export function LoginForm({
+  onLogin,
+}: {
+  onLogin: (userType: "admin" | "staff") => void;
+}) {
+  const AUTH_ROLE_KEY = "userRole";
+  const AUTH_TOKEN_KEY = "token";
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [showSignupPassword, setShowSignupPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [activeTab, setActiveTab] = useState("login")
+  const [activeTab, setActiveTab] = useState("login");
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [emailValid, setEmailValid] = useState<boolean | null>(null)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailValid, setEmailValid] = useState<boolean | null>(null);
 
-  const [signupName, setSignupName] = useState("")
-  const [signupEmail, setSignupEmail] = useState("")
-  const [signupPassword, setSignupPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [signupEmailValid, setSignupEmailValid] = useState<boolean | null>(null)
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [signupEmailValid, setSignupEmailValid] = useState<boolean | null>(
+    null,
+  );
 
-  const API_BASE = import.meta.env.VITE_API_URL
+  const API_BASE = import.meta.env.VITE_API_URL;
   // Must contain at least one alphabet before @
   const validateEmail = (value: string) => {
-    const pattern = /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/
-    return pattern.test(value)
-  }
+    const pattern =
+      /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/;
+    return pattern.test(value);
+  };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setEmail(value)
+    const value = e.target.value;
+    setEmail(value);
     if (value.length > 0) {
-      setEmailValid(validateEmail(value))
+      setEmailValid(validateEmail(value));
     } else {
-      setEmailValid(null)
+      setEmailValid(null);
     }
-  }
+  };
 
   const handleSignupEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSignupEmail(value)
+    const value = e.target.value;
+    setSignupEmail(value);
     if (value.length > 0) {
-      setSignupEmailValid(validateEmail(value))
+      setSignupEmailValid(validateEmail(value));
     } else {
-      setSignupEmailValid(null)
+      setSignupEmailValid(null);
     }
-  }
+  };
 
   const handleLoginClick = async () => {
-  const cleanedEmail = email.trim().toLowerCase()
-  const cleanedPassword = password.trim()
+    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedPassword = password.trim();
 
-  if (!validateEmail(cleanedEmail)) {
-    alert("Invalid email format")
-    return
-  }
+    if (!validateEmail(cleanedEmail)) {
+      alert("Invalid email format");
+      return;
+    }
 
-  try {
+    try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: cleanedEmail,
-          password: cleanedPassword
-        })
-      })
+          password: cleanedPassword,
+        }),
+      });
 
-      const data = await res.json()
+      const data = await res.json();
 
       if (!res.ok) {
-        alert(JSON.stringify(data.detail || "Login failed"))
-        return
+        alert(JSON.stringify(data.detail || "Login failed"));
+        return;
       }
 
-      // store token
-      localStorage.setItem("token", data.access_token)
+      // store auth details for refresh persistence
+      localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+      localStorage.setItem(AUTH_ROLE_KEY, data.role);
 
       // redirect using your existing function
-      onLogin(data.role)
-
+      onLogin(data.role);
     } catch (err) {
-      alert("Server error")
+      alert("Server error");
     }
-  }
+  };
 
   const handleSignup = async () => {
-  if (!signupName.trim()) {
-    alert("Enter full name")
-    return
-  }
+    if (!signupName.trim()) {
+      alert("Enter full name");
+      return;
+    }
 
-  if (!validateEmail(signupEmail.trim())) {
-    alert("Invalid email format")
-    return
-  }
+    if (!validateEmail(signupEmail.trim())) {
+      alert("Invalid email format");
+      return;
+    }
 
-  if (signupPassword !== confirmPassword) {
-    alert("Passwords do not match")
-    return
-  }
+    if (signupPassword !== confirmPassword) {
+      alert("Passwords do not match");
+      return;
+    }
 
-  try {
+    try {
       const res = await fetch(`${API_BASE}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: signupEmail.trim(),
           password: signupPassword,
-          full_name: signupName.trim()
-        })
-      })
+          full_name: signupName.trim(),
+        }),
+      });
 
-      const data = await res.json()
+      const data = await res.json();
 
       if (!res.ok) {
-        alert(JSON.stringify(data.detail || "Login failed"))
-        return
+        alert(JSON.stringify(data.detail || "Login failed"));
+        return;
       }
 
-      alert("Signup successful. Wait for admin approval.")
-      setActiveTab("login")
-
+      alert("Signup successful. Wait for admin approval.");
+      setActiveTab("login");
     } catch (err) {
-      alert("Server error")
+      alert("Server error");
     }
-  }  
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === "Enter") {
-    if (activeTab === "login") {
-      if (validateEmail(email) && password.trim() !== "") {
-        handleLoginClick()
-      }
-    } else {
-      if (
-        signupName.trim() &&
-        validateEmail(signupEmail) &&
-        signupPassword.trim() &&
-        confirmPassword.trim() &&
-        signupPassword === confirmPassword
-      ) {
-        handleSignup()
+    if (e.key === "Enter") {
+      if (activeTab === "login") {
+        if (validateEmail(email) && password.trim() !== "") {
+          handleLoginClick();
+        }
+      } else {
+        if (
+          signupName.trim() &&
+          validateEmail(signupEmail) &&
+          signupPassword.trim() &&
+          confirmPassword.trim() &&
+          signupPassword === confirmPassword
+        ) {
+          handleSignup();
+        }
       }
     }
-  }
-}
+  };
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center relative p-4">
@@ -180,7 +196,11 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
 
         <Card className="shadow-xl border border-blue-200 bg-white/95 backdrop-blur">
           <CardHeader className="pb-4">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2 bg-blue-100">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -202,8 +222,8 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                         emailValid === null
                           ? "border-blue-300"
                           : emailValid
-                          ? "border-green-500"
-                          : "border-red-500"
+                            ? "border-green-500"
+                            : "border-red-500"
                       }`}
                     />
                     {emailValid !== null && (
@@ -217,10 +237,10 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                     )}
                   </div>
                   {emailValid === false && (
-                  <p className="text-xs text-red-600">
-                    Email must match pattern: abc@sjcetpalai.ac.in
-                  </p>
-                )}
+                    <p className="text-xs text-red-600">
+                      Email must match pattern: abc@sjcetpalai.ac.in
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -240,7 +260,11 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -257,10 +281,12 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
 
               {/* SIGNUP */}
               <TabsContent value="signup" className="mt-6 space-y-4">
-
                 <div className="space-y-2">
                   <Label>Full Name</Label>
-                  <Input value={signupName} onChange={(e) => setSignupName(e.target.value)} />
+                  <Input
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -276,8 +302,8 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                         signupEmailValid === null
                           ? "border-blue-300"
                           : signupEmailValid
-                          ? "border-green-500"
-                          : "border-red-500"
+                            ? "border-green-500"
+                            : "border-red-500"
                       }`}
                     />
                     {signupEmailValid !== null && (
@@ -291,10 +317,10 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                     )}
                   </div>
                   {emailValid === false && (
-                  <p className="text-xs text-red-600">
-                    Email must match pattern: abc@sjcetpalai.ac.in
-                  </p>
-                )}
+                    <p className="text-xs text-red-600">
+                      Email must match pattern: abc@sjcetpalai.ac.in
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -311,7 +337,11 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                       onClick={() => setShowSignupPassword(!showSignupPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600"
                     >
-                      {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showSignupPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -327,10 +357,16 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                     />
                     <button
                       type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600"
                     >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showConfirmPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -349,17 +385,17 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
                   Create Account
                 </Button>
               </TabsContent>
-
             </Tabs>
           </CardHeader>
 
           <CardFooter className="flex justify-center border-t pt-4">
             <p className="text-xs text-blue-800 text-center">
-              Authorized Personnel Only - St. Joseph's College of Engineering And Technology, Palai [ Autonomous ]
+              Authorized Personnel Only - St. Joseph's College of Engineering
+              And Technology, Palai [ Autonomous ]
             </p>
           </CardFooter>
         </Card>
       </div>
     </div>
-  )
+  );
 }
