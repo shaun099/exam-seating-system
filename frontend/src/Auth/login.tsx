@@ -6,11 +6,15 @@ import { Label } from "@/component/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/component/ui/tabs"
 import { Mail, Lock, Eye, EyeOff, GraduationCap, CheckCircle, XCircle, ShieldAlert } from "lucide-react"
 
-export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') => void }) {
-
-  const [showPassword, setShowPassword] = useState(false)
-  const [showSignupPassword, setShowSignupPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+export function LoginForm({
+  onLogin,
+}: {
+  onLogin: (userType: "admin" | "staff") => void;
+}) {
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [activeTab, setActiveTab] = useState("login")
   
@@ -34,9 +38,10 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
   const API_BASE = import.meta.env.VITE_API_URL
 
   const validateEmail = (value: string) => {
-    const pattern = /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/
-    return pattern.test(value)
-  }
+    const pattern =
+      /^[a-zA-Z0-9._%+-]*[a-zA-Z][a-zA-Z0-9._%+-]*@sjcetpalai\.ac\.in$/;
+    return pattern.test(value);
+  };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -82,9 +87,9 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
       }
 
     } catch (err) {
-      alert("Server error")
+      alert("Server error");
     }
-  }
+  };
 
   const handlePasswordUpdate = async () => {
     if (newPassword !== confirmNewPassword) return alert("Passwords do not match")
@@ -127,9 +132,9 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
         body: JSON.stringify({
           email: signupEmail.trim(),
           password: signupPassword,
-          full_name: signupName.trim()
-        })
-      })
+          full_name: signupName.trim(),
+        }),
+      });
 
       if (!res.ok) {
         const data = await res.json()
@@ -140,7 +145,7 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
       alert("Signup successful. Wait for admin approval.")
       setActiveTab("login")
     } catch (err) {
-      alert("Server error")
+      alert("Server error");
     }
   }
 
@@ -205,7 +210,11 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
 
         <Card className="shadow-xl border border-blue-200 bg-white/95 backdrop-blur">
           <CardHeader className="pb-4">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2 bg-blue-100">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -280,5 +289,5 @@ export function LoginForm({ onLogin }: { onLogin: (userType: 'admin' | 'staff') 
         </Card>
       </div>
     </div>
-  )
+  );
 }

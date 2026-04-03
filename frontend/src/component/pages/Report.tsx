@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import {
   Download,
   FileText,
@@ -9,18 +9,92 @@ import {
   ArrowLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-// --- DATA ---
-const semesters = [
-  { id: "s1", name: "Semester 1" },
-  { id: "s3", name: "Semester 3" },
-  { id: "s5", name: "Semester 5" },
-];
 
-const slotsMap: Record<string, { id: string; name: string }[]> = {
-  s1: [{ id: "s1a", name: "Slot A" }, { id: "s1b", name: "Slot B" }],
-  s3: [{ id: "s3a", name: "Slot A" }, { id: "s3b", name: "Slot B" }, { id: "s3c", name: "Slot C" }],
-  s5: [{ id: "s5a", name: "Slot A" }, { id: "s5b", name: "Slot B" }, { id: "s5c", name: "Slot C" }, { id: "s5d", name: "Slot D" }],
+interface SlotSummaryApiItem {
+  event_name: string;
+  slot: string;
+  date: string;
+  session: string;
+}
+
+interface SlotSummaryApiResponse {
+  data: SlotSummaryApiItem[];
+}
+
+interface SlotOption {
+  id: string;
+  name: string;
+  date: string;
+  session: string;
+  eventName: string;
+}
+
+interface SemesterOption {
+  id: string;
+  name: string;
+  slots: SlotOption[];
+}
+
+const API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
+const SLOT_SUMMARY_ENDPOINT = `${API_BASE}/api/v1/seat-allocations/slots-summary`;
+
+const extractSemesterFromEventName = (eventName: string) => {
+  const match = eventName.match(/\bS\d+\b/i);
+  return (match?.[0] || "UNKNOWN").toUpperCase();
 };
+
+const semesterSortValue = (semesterCode: string) => {
+  const match = semesterCode.match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+};
+
+const toTime = (date: string) => {
+  const time = new Date(date).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+const slotSortValue = (slotName: string) => {
+  const code = slotName.replace(/^slot\s+/i, "").trim().toUpperCase();
+  const ch = code.charCodeAt(0);
+  return Number.isFinite(ch) ? ch : Number.MAX_SAFE_INTEGER;
+};
+
+const normalizeSlotData = (items: SlotSummaryApiItem[]): SemesterOption[] => {
+  const semesterMap = new Map<string, SlotOption[]>();
+
+  for (const item of items) {
+    const semesterCode = extractSemesterFromEventName(item.event_name);
+    const slotCode = item.slot.trim().toUpperCase();
+    if (!semesterMap.has(semesterCode)) {
+      semesterMap.set(semesterCode, []);
+    }
+
+    semesterMap.get(semesterCode)!.push({
+      id: `${semesterCode.toLowerCase()}-${slotCode.toLowerCase()}-${item.date}-${item.session}`,
+      name: `Slot ${slotCode}`,
+      date: item.date,
+      session: item.session,
+      eventName: item.event_name,
+    });
+  }
+
+  return Array.from(semesterMap.entries())
+    .sort(([a], [b]) => {
+      const sortDiff = semesterSortValue(a) - semesterSortValue(b);
+      return sortDiff !== 0 ? sortDiff : a.localeCompare(b);
+    })
+    .map(([semesterCode, slots]) => ({
+      id: semesterCode.toLowerCase(),
+      name: semesterCode,
+      slots: slots.sort((a, b) => {
+        const dateDiff = toTime(b.date) - toTime(a.date);
+        return dateDiff !== 0 ? dateDiff : slotSortValue(a.name) - slotSortValue(b.name);
+      }),
+    }));
+};
+
+const getReportSlotCode = (slotName: string) =>
+  slotName.replace(/^slot\s+/i, "").trim().toUpperCase();
 
 const reportTypes = [
   { 
@@ -53,18 +127,77 @@ const reportTypes = [
   },
 ];
 
-const recentReports = [
-  { semId: "s5", slotId: "s5a", semName: "Semester 5", slotName: "Slot A", generatedAt: "2 hours ago" },
-  { semId: "s3", slotId: "s3b", semName: "Semester 3", slotName: "Slot B", generatedAt: "1 day ago" },
-];
+interface ReportsProps {
+  onNavigate?: (page: string) => void;
+}
 
-const Reports: React.FC = () => {
+const Reports: React.FC<ReportsProps> = ({ onNavigate }) => {
+  const [semesters, setSemesters] = useState<SemesterOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeSemId, setActiveSemId] = useState<string | null>(null);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchSlotSummary = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        if (!API_BASE) {
+          throw new Error("VITE_API_URL is not configured.");
+        }
+
+        const response = await fetch(SLOT_SUMMARY_ENDPOINT, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch slot summary: ${response.status}`);
+        }
+
+        const payload = (await response.json()) as SlotSummaryApiResponse;
+
+        const normalized = normalizeSlotData(payload.data ?? []);
+        setSemesters(normalized);
+      } catch (fetchError) {
+        if (controller.signal.aborted) return;
+        setError(fetchError instanceof Error ? fetchError.message : "Failed to load slot summary.");
+        setSemesters([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchSlotSummary();
+
+    return () => controller.abort();
+  }, []);
+
   const selectedSem = semesters.find(s => s.id === activeSemId);
-  const availableSlots = activeSemId ? slotsMap[activeSemId] : [];
+  const availableSlots = selectedSem?.slots ?? [];
   const selectedSlot = availableSlots.find(sl => sl.id === activeSlotId);
+
+  const recentReports = useMemo(() => {
+    return semesters
+      .flatMap((sem) =>
+        sem.slots.map((slot) => ({
+          semId: sem.id,
+          slotId: slot.id,
+          semName: sem.name,
+          slotName: slot.name,
+          date: slot.date,
+          session: slot.session,
+          eventName: slot.eventName,
+        }))
+      )
+      .sort((a, b) => toTime(b.date) - toTime(a.date))
+      .slice(0, 4);
+  }, [semesters]);
 
   return (
     <div className="fixed top-16 left-64 right-0 bottom-0 overflow-hidden bg-[#fafafa] text-slate-900 antialiased font-sans flex flex-col">
@@ -98,7 +231,16 @@ const Reports: React.FC = () => {
       </header>
 
       <main className="flex-1 overflow-auto max-w-6xl mx-auto px-8 py-12 w-full">
-        {!activeSemId ? (
+        {isLoading ? (
+          <div className="animate-in fade-in duration-500">
+            <p className="text-slate-500 font-medium">Loading slot summary...</p>
+          </div>
+        ) : error ? (
+          <div className="animate-in fade-in duration-500">
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Unable to load slots</h2>
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        ) : !activeSemId ? (
           /* HOME PAGE: RECENT DOWNLOADS */
           <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
             <div className="flex flex-col gap-1 mb-6">
@@ -107,12 +249,17 @@ const Reports: React.FC = () => {
             </div>
             
             <div className="space-y-6">
+              {recentReports.length === 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-8">
+                  <p className="text-slate-500 font-medium">No slot data available.</p>
+                </div>
+              )}
               {recentReports.map((report, index) => (
                 <div key={index} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm shadow-slate-200/50">
                   <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <div>
                       <h2 className="text-xl font-bold tracking-tight text-slate-800">{report.semName} • {report.slotName}</h2>
-                      <p className="text-sm text-slate-500 font-medium">Generated {report.generatedAt}</p>
+                      <p className="text-sm text-slate-500 font-medium">{report.date} • {report.session}</p>
                     </div>
                     <button 
                       onClick={() => { setActiveSemId(report.semId); setActiveSlotId(report.slotId); }}
@@ -135,7 +282,17 @@ const Reports: React.FC = () => {
                         </div>
                         <p className="text-sm font-bold text-slate-800 leading-tight mb-2">{rpt.title}</p>
                         <p className="text-xs text-slate-400 font-medium mb-6 line-clamp-2 leading-relaxed">{rpt.description}</p>
-                        <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all uppercase tracking-wider">
+                        <button
+                          onClick={() => {
+                            if (rpt.id === "matrix") {
+                              localStorage.setItem("classMatrix.sem", extractSemesterFromEventName(report.eventName));
+                              localStorage.setItem("classMatrix.slot", getReportSlotCode(report.slotName));
+                              onNavigate?.("class-matrix-preview");
+                              return;
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all uppercase tracking-wider"
+                        >
                           <Download size={14} /> Download
                         </button>
                       </div>
@@ -165,6 +322,8 @@ const Reports: React.FC = () => {
                 >
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-blue-500 transition-colors">Session</span>
                   <h4 className="text-2xl font-bold mt-1 tracking-tight text-slate-800">{slot.name}</h4>
+                  <p className="text-xs font-medium text-slate-500 mt-2">{slot.date}</p>
+                  <p className="text-xs font-medium text-slate-500">{slot.session}</p>
                 </button>
               ))}
             </div>
@@ -183,6 +342,7 @@ const Reports: React.FC = () => {
                     <div>
                         <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">{selectedSem?.name}</p>
                         <h2 className="text-2xl font-bold tracking-tight text-slate-800">{selectedSlot?.name} Reports</h2>
+                      <p className="text-sm text-slate-500 font-medium mt-1">{selectedSlot?.date} • {selectedSlot?.session}</p>
                     </div>
                 </div>
             </div>
@@ -199,7 +359,16 @@ const Reports: React.FC = () => {
                         <p className="text-xs text-slate-400 font-medium">{report.description}</p>
                     </div>
                   </div>
-                  <button className="p-3.5 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                  <button
+                    onClick={() => {
+                      if (report.id === "matrix" && selectedSlot) {
+                        localStorage.setItem("classMatrix.sem", extractSemesterFromEventName(selectedSlot.eventName));
+                        localStorage.setItem("classMatrix.slot", getReportSlotCode(selectedSlot.name));
+                        onNavigate?.("class-matrix-preview");
+                      }
+                    }}
+                    className="p-3.5 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                  >
                     <Download size={20} />
                   </button>
                 </div>

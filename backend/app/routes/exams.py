@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.services.exam_service import ExamService
@@ -18,13 +19,19 @@ def get_all_exams(db: Session = Depends(get_db)):
         exams = ExamService.get_all_exams(db)
         return {
             "success": True,
+            "message": "Exams fetched successfully.",
             "data": exams,
             "count": len(exams)
         }
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"success": False, "message": str(e.detail)},
+        )
     except Exception as e:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail=f"Error fetching exams: {str(e)}"
+            content={"success": False, "message": f"Error fetching exams: {str(e)}"},
         )
 
 
@@ -42,10 +49,16 @@ def get_exam_by_id(exam_id: int, db: Session = Depends(get_db)):
             )
         return {
             "success": True,
+            "message": "Exam fetched successfully.",
             "data": exam
         }
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"success": False, "message": str(e.detail)},
+        )
     except Exception as e:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail=f"Error fetching exam: {str(e)}"
+            content={"success": False, "message": f"Error fetching exam: {str(e)}"},
         )
