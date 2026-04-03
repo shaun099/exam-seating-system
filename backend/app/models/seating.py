@@ -13,7 +13,7 @@ class Seating(Base):
 
     # THIS IS THE KEY FOR SPEED:
     # It prevents duplicate entries and makes the 'existing_seatings' 
-    # query in your UploadService run in milliseconds.
+    # query in your vice run in milliseconds.
     __table_args__ = (
         UniqueConstraint('student_id', 'course_id', 'exam_id', name='_student_course_exam_uc'),
     )
