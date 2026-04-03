@@ -6,12 +6,17 @@ from app.models.user import User
 from fastapi import HTTPException, Header
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-# Make sure this is in your .env file
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") 
 
+# Regular client for standard auth
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Admin client for bypass operations (Service Role Key)
 supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 def get_current_user(authorization: str = Header(...)):
@@ -85,21 +90,49 @@ def signup_service(data):
 
 def login_service(data):
     db: Session = SessionLocal()
-    res = supabase.auth.sign_in_with_password({"email": data.email, "password": data.password})
-    user = res.user
-    if not user:
-        raise Exception("Invalid credentials")
-    db_user = db.query(User).filter(User.id == user.id).first()
-    if not db_user:
-        raise Exception("User not found")
-    if db_user.role == "staff" and not db_user.is_approved:
-        raise Exception("Not approved by admin")
-    return {
-        "access_token": res.session.access_token,
-        "role": db_user.role,
-        "user_id": db_user.id,
-        "needs_password_change": user.user_metadata.get("temp_password", False)
-    }
+    try:
+        res = supabase.auth.sign_in_with_password({"email": data.email, "password": data.password})
+        user = res.user
+        if not user:
+            raise Exception("Invalid credentials")
+            
+        db_user = db.query(User).filter(User.id == user.id).first()
+        if not db_user:
+            raise Exception("User not found")
+            
+        if db_user.role == "staff" and not db_user.is_approved:
+            raise Exception("Not approved by admin")
+            
+        return {
+            "access_token": res.session.access_token,
+            "role": db_user.role,
+            "user_id": db_user.id,
+            "needs_password_change": user.user_metadata.get("temp_password", False)
+        }
+    finally:
+        db.close()
+
+def update_password_service(user_id: str, new_password: str):
+    """
+    Updates the password and clears the temporary password flag.
+    """
+    try:
+        # Update user in Supabase Auth via Admin SDK
+        res = supabase_admin.auth.admin.update_user_by_id(
+            user_id,
+            {
+                "password": new_password,
+                "user_metadata": { "temp_password": False }
+            }
+        )
+        
+        if not res or not res.user:
+            raise HTTPException(status_code=400, detail="Password update failed")
+            
+        return {"message": "Password updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 def approve_user_service(user_id: str):
     db: Session = SessionLocal()
