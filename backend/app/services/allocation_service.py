@@ -10,6 +10,7 @@ from app.models.allocation import Allocation
 from app.models.seat_allocation import SeatAllocation
 from app.models.student import Student
 from app.models.exam import Exam
+from sqlalchemy import tuple_
 
 
 class AllocationService:
@@ -146,17 +147,14 @@ class AllocationService:
         # ------------------------------------------------------------------ #
         # STEP 4A: FETCH ROOMS
         # ------------------------------------------------------------------ #
-        # Get current exam's date and session from first entry
-        current_date = entries[0].date
-        current_session = entries[0].session
+        date_sessions = list({(e.date, e.session) for e in entries})
 
-        # Find allocations on the same date + session but different semester
+        # Find conflicting allocations — different semester, same date+session
         conflicting_allocation_ids = (
             db.query(Allocation.id)
             .join(Exam, Allocation.exam_id == Exam.id)
             .filter(
-                Exam.date == current_date,
-                Exam.session == current_session,
+                tuple_(Exam.date, Exam.session).in_(date_sessions),
                 Allocation.semester != semester,
             )
             .all()
@@ -164,7 +162,6 @@ class AllocationService:
         conflicting_ids = [a.id for a in conflicting_allocation_ids]
 
         if conflicting_ids:
-            # Same date + session → exclude already used rooms
             used_room_ids = (
                 db.query(SeatAllocation.room_id)
                 .filter(SeatAllocation.allocation_id.in_(conflicting_ids))
@@ -175,13 +172,24 @@ class AllocationService:
 
             rooms = (
                 db.query(Room)
-                .filter(Room.id.notin_(used_room_ids))
+                .filter(
+                    Room.id.notin_(used_room_ids),
+                    Room.rows >= rows,
+                    Room.cols >= cols,
+                )
                 .order_by(Room.id)
                 .all()
             )
         else:
-            # Different date or session → use all rooms
-            rooms = db.query(Room).order_by(Room.id).all()
+            rooms = (
+                db.query(Room)
+                .filter(
+                    Room.rows >= rows,
+                    Room.cols >= cols,
+                )
+                .order_by(Room.id)
+                .all()
+            )
 
         if not rooms:
             raise HTTPException(

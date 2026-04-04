@@ -154,3 +154,31 @@ def update_room(room_id: int, updated_data: dict, db: Session = Depends(get_db))
     db.refresh(room)
 
     return {"message": "Room updated successfully"}
+
+from typing import List
+from pydantic import BaseModel
+
+class RoomBulkUpdateItem(BaseModel):
+    id: int
+    rows: int
+    cols: int
+
+class RoomBulkUpdateRequest(BaseModel):
+    rooms: List[RoomBulkUpdateItem]
+
+@router.patch("/rooms/bulk-update")
+def bulk_update_rooms(payload: RoomBulkUpdateRequest, db: Session = Depends(get_db)):
+    try:
+        for item in payload.rooms:
+            room = db.query(Room).filter(Room.id == item.id).first()
+            if not room:
+                raise HTTPException(status_code=404, detail=f"Room {item.id} not found")
+            room.rows = item.rows
+            room.cols = item.cols
+        db.commit()
+        return {"success": True, "message": f"Updated {len(payload.rooms)} rooms."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

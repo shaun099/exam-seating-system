@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import { RoomConfigurationModal } from "./RoomConfigurationModal.tsx";
+import { getDefaultMatrix } from "../../utils/roomConfig.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -20,7 +21,6 @@ import { RoomConfigurationModal } from "./RoomConfigurationModal.tsx";
 const EXAMS_ENDPOINT = `${import.meta.env.VITE_API_URL}/api/v1/exams/`;
 const ALLOCATE_ENDPOINT = `${import.meta.env.VITE_API_URL}/api/v1/allocate/`;
 const ALLOCATION_STATUS_ENDPOINT = `${import.meta.env.VITE_API_URL}/api/v1/seat-allocations/slots-summary/`;
-const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix";
 
 const SLOT_ORDER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -165,27 +165,6 @@ const mergeAllocationStatuses = (
         : "pending",
     })),
   }));
-};
-
-const getDefaultMatrix = () => {
-  const fallback = { rows: 6, cols: 5 };
-  try {
-    const raw = localStorage.getItem(SEATING_DEFAULTS_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as { rows?: number; cols?: number };
-    return {
-      rows:
-        Number.isFinite(parsed.rows) && (parsed.rows ?? 0) > 0
-          ? parsed.rows!
-          : fallback.rows,
-      cols:
-        Number.isFinite(parsed.cols) && (parsed.cols ?? 0) > 0
-          ? parsed.cols!
-          : fallback.cols,
-    };
-  } catch {
-    return fallback;
-  }
 };
 
 // ---------------------------------------------------------------------------
