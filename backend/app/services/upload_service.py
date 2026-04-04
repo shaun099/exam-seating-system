@@ -140,7 +140,7 @@ class UploadService:
         }
 
         column_map = {
-            "student":     UploadService.get_column_name(normalized_columns, ["student", "name"]),
+            "student":     vice.get_column_name(normalized_columns, ["student", "name"]),
             "reg_no":      UploadService.get_column_name(normalized_columns, ["reg_no", "register_no", "registration_no"]),
             "branch_name": UploadService.get_column_name(normalized_columns, ["branch_name", "branch"]),
             "course":      UploadService.get_column_name(normalized_columns, ["course", "course_name"]),
@@ -167,7 +167,7 @@ class UploadService:
         skipped: list[dict] = []
 
         for idx, row in dataframe.iterrows():
-            row_num = idx + 3  # human-readable: +1 for 0-index, +1 for header row 0, +1 for header row 1
+            row_num = idx + 3
 
             student_name, reg_no = "", ""
             if column_map["student"]:
@@ -226,10 +226,16 @@ class UploadService:
     def parse_room_data(content: bytes, filename: str) -> tuple[list[dict], list[dict]]:
         dataframe = UploadService._read_room_file(content, filename)
 
+        # 🔥 DEBUG
+        print("COLUMNS:", list(dataframe.columns))
+        print("FIRST ROW:", dataframe.head())
+
         normalized_columns = {
             str(col).strip().lower().replace(" ", "_"): col
             for col in dataframe.columns
         }
+
+        print("NORMALIZED:", normalized_columns)  # 🔥
 
         column_map = {
             "room_number": UploadService.get_column_name(
@@ -242,9 +248,11 @@ class UploadService:
             ),
             "column": UploadService.get_column_name(
                 normalized_columns,
-                ["column", "columns", "col", "column_size", "col_size", "column_count"],
+                ["column", "columns", "col", "cols", "column_size", "column_count"],
             ),
         }
+
+        print("COLUMN MAP:", column_map)  # 🔥
 
         missing = [name for name in ("room_number", "row", "column") if not column_map[name]]
         if missing:
@@ -257,34 +265,25 @@ class UploadService:
         skipped: list[dict] = []
 
         for idx, row in dataframe.iterrows():
-            row_num = idx + 2
-
             room_number = UploadService.clean_text(row[column_map["room_number"]])
             row_value = pd.to_numeric(row[column_map["row"]], errors="coerce")
             col_value = pd.to_numeric(row[column_map["column"]], errors="coerce")
 
-            entry: dict[str, Any] = {
+            entry = {
                 "room_number": room_number,
                 "row": int(row_value) if not pd.isna(row_value) else None,
                 "column": int(col_value) if not pd.isna(col_value) else None,
             }
 
-            invalid_fields: list[str] = []
-            if not entry["room_number"]:
-                invalid_fields.append("room_number")
-            if entry["row"] is None or entry["row"] <= 0:
-                invalid_fields.append("row")
-            if entry["column"] is None or entry["column"] <= 0:
-                invalid_fields.append("column")
+            print("ENTRY:", entry)  # 🔥
 
-            if invalid_fields:
-                skipped.append({"row": row_num, "reason": f"invalid fields: {invalid_fields}", **entry})
-            else:
+            if entry["room_number"] and entry["row"] and entry["column"]:
                 valid.append(entry)
+            else:
+                skipped.append(entry)
 
-        logger.info("Parsed %d valid room rows, %d skipped", len(valid), len(skipped))
-        if skipped:
-            logger.warning("Skipped room rows sample: %s", skipped[:10])
+        print("VALID:", valid)      # 🔥
+        print("SKIPPED:", skipped)  # 🔥
 
         return valid, skipped
 
@@ -372,7 +371,6 @@ class UploadService:
 
         branches, students, courses, exams = UploadService._upsert_lookup_entities(data, db)
 
-        # Scope the dedup query only to student/exam IDs present in this upload
         student_ids = {s.id for s in students.values()}
         exam_ids    = {e.id for e in exams.values()}
 
@@ -421,54 +419,50 @@ class UploadService:
             "skipped_duplicate": len(data) - len(new_seating_rows),
             "skipped_sample": skipped[:5] if skipped else [],
         }
-
     @staticmethod
     async def process_room_upload(file: UploadFile, db: Session):
         content = await file.read()
-        data, skipped = UploadService.parse_room_data(content, file.filename or "")
 
-        if not data:
-            return {
-                "message": "No valid room records found",
-                "skipped": len(skipped),
-                "skipped_sample": skipped[:5],
-            }
+        import pandas as pd
+        from io import BytesIO
 
-        room_numbers = {entry["room_number"] for entry in data}
-        existing_rooms = {
-            room.room_number: room
-            for room in db.query(Room).filter(Room.room_number.in_(room_numbers)).all()
-        }
+        df = pd.read_csv(BytesIO(content))
+
+        print("CSV DATA:\n", df.head())  # 🔥 debug
+
+        if not {"room_number", "rows", "cols"}.issubset(df.columns):
+            raise HTTPException(status_code=400, detail="Invalid CSV format")
 
         inserted = 0
-        updated = 0
+        skipped = []
 
-        for entry in data:
-            room = existing_rooms.get(entry["room_number"])
-            if room is None:
-                room = Room(
-                    room_number=entry["room_number"],
-                    rows=entry["row"],
-                    cols=entry["column"],
-                )
-                db.add(room)
-                existing_rooms[entry["room_number"]] = room
-                inserted += 1
-                continue
+        for _, row in df.iterrows():
+            try:
+                entry = {   # ✅ ALWAYS DEFINE FIRST
+                    "room_number": str(row["room_number"]).strip(),
+                    "rows": int(row["rows"]),
+                    "cols": int(row["cols"])
+                }
 
-            if room.rows != entry["row"] or room.cols != entry["column"]:
-                room.rows = entry["row"]
-                room.cols = entry["column"]
-                updated += 1
+                existing = db.query(Room).filter(
+                    Room.room_number == entry["room_number"]
+                ).first()
+
+                if not existing:
+                    new_room = Room(
+                        room_number=entry["room_number"],
+                        rows=entry["rows"],
+                        cols=entry["cols"]
+                    )
+                    db.add(new_room)
+                    inserted += 1
+
+            except Exception as e:
+                skipped.append({"error": str(e)})
 
         db.commit()
 
-        unchanged = len(data) - inserted - updated
         return {
-            "message": "Room upload successful",
             "inserted": inserted,
-            "updated": updated,
-            "unchanged": unchanged,
-            "skipped_parse": len(skipped),
-            "skipped_sample": skipped[:5] if skipped else [],
+            "skipped": len(skipped)
         }

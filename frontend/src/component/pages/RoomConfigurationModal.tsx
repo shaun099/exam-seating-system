@@ -11,9 +11,6 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Button } from "../ui/button";
 import { Upload, Play, FileText, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type AllocationStatus = "idle" | "loading" | "success" | "error";
 

@@ -8,7 +8,7 @@ import Reports from "./component/pages/Report";
 import EmailNotifications from "./component/pages/email-notifications";
 import Dashboard from "./component/pages/Dashboard";
 import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
-import { RoomConfig } from "./component/pages/room-config";
+import  RoomConfig  from "./component/pages/room-config";
 import { AdminPortal } from "./adminportal/admin";
 import AdminReports from "./adminportal/adminreports";
 import { ClassMatrixPreview } from "./component/pages/ClassMatrixPreview";

@@ -67,30 +67,28 @@ export function RoomDetails({
     setEditedHall({ ...editedHall, rows: newRowCount, rowConfigs: newConfigs });
   };
 
-  const updateSingleRow = (index: number, val: string) => {
-    const updated = [...editedHall.rowConfigs];
-    updated[index] = parseInt(val) || 0;
-    setEditedHall({ ...editedHall, rowConfigs: updated });
-  };
+const updateSingleRow = (index: number, val: string) => {
+  const updated = [...editedHall.rowConfigs];
+  updated[index] = parseInt(val) || 0;
+  setEditedHall({ ...editedHall, rowConfigs: updated });
+};
 
-  const handleSave = () => {
-    onSave({
-      id: editedHall.id,
-      hallName: editedHall.hallName,
-      building: editedHall.building,
-      universityMode: { rows: 6, cols: 5, capacity: 30 },
-      internalProfile: {
-        rows: editedHall.rows,
-        cols: editedHall.cols,
-        rowConfigs: editedHall.rowConfigs,
-        capacity: editedHall.totalInternalCapacity
-      }
-    });
+const handleSave = () => {
+  onSave({
+    id: editedHall.id,
+    hallName: editedHall.hallName,
 
-    alert(`Profile for ${editedHall.hallName} updated!`);
-  };
+    // ✅ FLAT STRUCTURE (IMPORTANT)
+    rows: Number(editedHall.rows),
+    columns: Number(editedHall.cols),
 
-  return (
+    building: editedHall.building
+  });
+
+  alert(`Profile for ${editedHall.hallName} updated!`);
+};
+
+return (
     <div className="fixed top-16 left-64 right-0 bottom-0 bg-gray-50 flex flex-col overflow-hidden">
 
       <main className="flex-1 overflow-auto custom-scrollbar">
