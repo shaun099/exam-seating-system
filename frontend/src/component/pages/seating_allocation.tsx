@@ -212,11 +212,11 @@ const fetchAllocatedSlots = async (
   return data.data || [];
 };
 
-// Updated postAllocate to accept semester
+// Updated postAllocate to accept sem
 const postAllocate = async (payload: {
   exam_id: number;
   slot: string;
-  semester: string; // New field
+  sem: string; // New field
   rows: number;
   cols: number;
 }) => {
@@ -369,7 +369,7 @@ export function SeatingAllocation({
     const payload = {
       exam_id: selectedSlot.examId,
       slot: selectedSlot.slotLetter,
-      semester: selectedSlot.semester,
+      sem: selectedSlot.semester, // ← New: Sending semester
       rows: matrix.rows,
       cols: matrix.cols,
     };
