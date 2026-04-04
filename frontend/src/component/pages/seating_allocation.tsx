@@ -369,7 +369,7 @@ export function SeatingAllocation({
     const payload = {
       exam_id: selectedSlot.examId,
       slot: selectedSlot.slotLetter,
-      sem: selectedSlot.semester, // ← New: Sending semester
+      semester: selectedSlot.semester,
       rows: matrix.rows,
       cols: matrix.cols,
     };
