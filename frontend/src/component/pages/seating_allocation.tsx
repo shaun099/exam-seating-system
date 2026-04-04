@@ -212,11 +212,11 @@ const fetchAllocatedSlots = async (
   return data.data || [];
 };
 
-// Updated postAllocate to accept semester
+// Updated postAllocate to accept sem
 const postAllocate = async (payload: {
   exam_id: number;
   slot: string;
-  semester: string; // New field
+  sem: string; // New field
   rows: number;
   cols: number;
 }) => {

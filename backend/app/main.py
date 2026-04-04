@@ -46,16 +46,16 @@ app.add_middleware(
 # ✅ THEN use it
 app.include_router(auth.router)
 app.include_router(admin.router)
-# Base.metadata.drop_all(bind=engine, tables=[
-#     SeatAllocation.__table__,
-#     Seating.__table__,
-#     Allocation.__table__,
-#     Student.__table__,
-#     Course.__table__,
-#     Exam.__table__,
-#     Branch.__table__,
-#     Room.__table__,
-# ])
+Base.metadata.drop_all(bind=engine, tables=[
+    SeatAllocation.__table__,
+    Seating.__table__,
+    Allocation.__table__,
+    Student.__table__,
+    Course.__table__,
+    Exam.__table__,
+    Branch.__table__,
+    Room.__table__,
+])
 
 Base.metadata.create_all(bind=engine)
 
