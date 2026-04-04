@@ -125,44 +125,32 @@ def create_room(room_data: RoomCreate, db: Session = Depends(get_db)):
         )
 
 
-# ✏️ UPDATE ROOM
 @router.put("/rooms/{room_id}")
 def update_room(room_id: int, updated_data: dict, db: Session = Depends(get_db)):
-    try:
-        room = db.query(Room).filter(Room.id == room_id).first()
+    room = db.query(Room).filter(Room.id == room_id).first()
 
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
 
-        if "roomId" in updated_data:
-            room.room_number = updated_data["roomId"]
+    # ✅ Prevent duplicate room_number
+    if "room_number" in updated_data:
+        duplicate = db.query(Room).filter(
+            Room.room_number == updated_data["room_number"],
+            Room.id != room_id
+        ).first()
 
-        if "rows" in updated_data:
-            room.rows = updated_data["rows"]
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Room number already exists")
 
-        if "columns" in updated_data:
-            room.cols = updated_data["columns"]
+        room.room_number = updated_data["room_number"]
 
-        db.commit()
-        db.refresh(room)
+    if "rows" in updated_data:
+        room.rows = updated_data["rows"]
 
-        return {
-            "success": True,
-            "message": "Room updated successfully.",
-            "data": {
-                "id": room.id,
-                "room_number": room.room_number,
-                "rows": room.rows,
-                "cols": room.cols,
-            },
-        }
-    except HTTPException as e:
-        return JSONResponse(
-            status_code=e.status_code,
-            content={"success": False, "message": str(e.detail)},
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"Failed to update room: {str(e)}"},
-        )
+    if "columns" in updated_data:
+        room.cols = updated_data["columns"]
+
+    db.commit()
+    db.refresh(room)
+
+    return {"message": "Room updated successfully"}
