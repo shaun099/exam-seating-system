@@ -142,67 +142,74 @@ export default function RoomConfig() {
 
   // 💾 SAVE
   const handleSaveRoomDetails = async (updatedRoom: any) => {
-    try {
-      console.log("FORM DATA:", updatedRoom); // 🔥 DEBUG
+  try {
+    const payload = {
+      room_number: (updatedRoom.hallName || "").trim(),
+      rows: Number(updatedRoom.rows) || 0,
+      columns: Number(updatedRoom.columns) || 0
+    };
 
-      const payload = {
-        roomId: (updatedRoom.hallName || "").trim(),
-        rows: Number(updatedRoom.rows) || 0,        // ✅ FIX
-        columns: Number(updatedRoom.columns) || 0   // ✅ FIX
-      };
-
-      console.log("SENDING PAYLOAD:", payload); // 🔥 DEBUG
-
-      if (!payload.roomId) {
-        alert("Room name required ❌");
-        return;
-      }
-
-      if (payload.rows <= 0 || payload.columns <= 0) {
-        alert("Rows & Columns must be > 0 ❌");
-        return;
-      }
-
-      const res = await fetch("http://127.0.0.1:8000/api/v1/upload/rooms/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const errTEXT = await res.text();
-        console.error("BD ERROR:", errTEXT);
-        alert(errTEXT);
-        return;
-      }
-
-      alert("Room added successfully ✅");
-
-      setRooms(prevRooms =>
-  prevRooms.map(room =>
-    room.id === updatedRoom.id
-      ? {
-          ...room,
-          roomId: updatedRoom.hallName,
-          rows: updatedRoom.rows,
-          columns: updatedRoom.columns,
-          capacity: updatedRoom.rows * updatedRoom.columns
-        }
-      : room
-  )
-);
-
-
-
-      setShowRoomDetails(false);
-      setSelectedRoom(null);
-
-    } catch (err) {
-      console.error(err);
+    if (!payload.room_number) {
+      alert("Room name required ❌");
+      return;
     }
-  };
+
+    if (payload.rows <= 0 || payload.columns <= 0) {
+      alert("Rows & Columns must be > 0 ❌");
+      return;
+    }
+
+    let res;
+
+    // 🔥 ✅ CHECK: EDIT OR CREATE
+    if (updatedRoom.id) {
+      // ✏️ UPDATE
+      res = await fetch(
+        `http://127.0.0.1:8000/api/v1/upload/rooms/${updatedRoom.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+    } else {
+      // ➕ CREATE
+      res = await fetch(
+        "http://127.0.0.1:8000/api/v1/upload/rooms/create",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+    }
+
+    if (!res.ok) {
+      const errTEXT = await res.text();
+      console.error("API ERROR:", errTEXT);
+      alert(errTEXT);
+      return;
+    }
+
+    alert(updatedRoom.id ? "Room updated successfully ✅" : "Room added successfully ✅");
+
+    await refreshRooms(); // 🔥 IMPORTANT: reload from DB
+
+    setShowRoomDetails(false);
+    setSelectedRoom(null);
+
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong ❌");
+  }
+};
+
+
+
 
   const clearSearch = () => {
     setSearchTerm("");

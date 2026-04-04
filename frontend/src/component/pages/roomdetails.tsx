@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -28,8 +28,7 @@ export interface RoomDetailsProps {
 
 export function RoomDetails({ 
   hallId, 
-  hallName, 
-  capacity, 
+  hallName,  
   building, 
   initialRows = 6,
   initialCols = 5,
@@ -48,13 +47,9 @@ export function RoomDetails({
     rows: initialRows,
     cols: initialCols,
     rowConfigs: initialRowConfigs || Array(initialRows).fill(initialCols),
-    totalInternalCapacity: capacity,
   });
 
-  useEffect(() => {
-    const total = editedHall.rowConfigs.reduce((a, b) => a + b, 0);
-    setEditedHall(prev => ({ ...prev, totalInternalCapacity: total }));
-  }, [editedHall.rowConfigs]);
+  const totalInternalCapacity = editedHall.rowConfigs.reduce((a, b) => a + b, 0);
 
   const handleRowChange = (count: string) => {
     const newRowCount = Math.max(1, parseInt(count) || 1);
@@ -66,12 +61,6 @@ export function RoomDetails({
 
     setEditedHall({ ...editedHall, rows: newRowCount, rowConfigs: newConfigs });
   };
-
-const updateSingleRow = (index: number, val: string) => {
-  const updated = [...editedHall.rowConfigs];
-  updated[index] = parseInt(val) || 0;
-  setEditedHall({ ...editedHall, rowConfigs: updated });
-};
 
 const handleSave = () => {
   onSave({
@@ -109,7 +98,7 @@ return (
                   Room Profile
                 </h1>
                 <p className="text-blue-600 text-sm">
-                  {editedHall.hallName} • {editedHall.building}
+                  {editedHall.hallName} 
                 </p>
               </div>
             </div>
@@ -118,7 +107,7 @@ return (
               onClick={handleSave}
               className="bg-blue-600 hover:bg-blue-700 shadow-md"
             >
-              <Save className="w-4 h-4 mr-2" /> Save Profile
+              <Save className="w-4 h-4 mr-2" /> Save
             </Button>
           </div>
 
@@ -172,19 +161,7 @@ return (
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-blue-900 font-semibold">
-                    Building
-                  </Label>
-                  <Input
-                    value={editedHall.building}
-                    onChange={(e) =>
-                      setEditedHall({
-                        ...editedHall,
-                        building: e.target.value,
-                      })
-                    }
-                    className="border-blue-200 focus:ring-blue-500"
-                  />
+                 
                 </div>
               </div>
 
@@ -264,32 +241,7 @@ return (
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
-                    <Label className="text-blue-900 block mb-4 font-bold italic">
-                      Fine-tune Capacity (Seats per Row)
-                    </Label>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                      {editedHall.rowConfigs.map((cap, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-3 bg-white p-2 rounded-md border border-blue-100 shadow-sm"
-                        >
-                          <span className="text-xs font-bold text-blue-500 w-10">
-                            R-{idx + 1}
-                          </span>
-                          <Input
-                            type="number"
-                            value={cap}
-                            className="h-8 w-16 border-none bg-blue-50/50 text-center font-bold"
-                            onChange={(e) =>
-                              updateSingleRow(idx, e.target.value)
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+               
                 </div>
               )}
 
@@ -301,7 +253,7 @@ return (
                   <p className="text-3xl font-black">
                     {activeTab === "university"
                       ? editedHall.universityCapacity
-                      : editedHall.totalInternalCapacity}
+                      : totalInternalCapacity}
                     <span className="text-sm font-normal ml-2 text-blue-200">
                       Students
                     </span>
