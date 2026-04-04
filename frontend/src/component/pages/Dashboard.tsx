@@ -119,16 +119,16 @@ export default function Dashboard({ onNavigate }: DashboardHomeProps) {
 
         <Card
           className="cursor-pointer border transition-all hover:shadow-lg hover:border-blue-500 hover:bg-blue-50/50"
-          onClick={() => onNavigate("email")}
+          onClick={() => onNavigate("site-activation")}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
               <Mail className="w-6 h-6 text-rose-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">Email Notifications</h3>
+              <h3 className="font-semibold text-foreground">Site Activation</h3>
               <p className="text-sm text-muted-foreground">
-                Send seating & duty alerts
+                Control active window by sem, slot, date and time
               </p>
             </div>
           </CardContent>

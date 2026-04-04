@@ -10,6 +10,7 @@ from app.routes.allocate import router as allocate_router, seat_allocations_rout
 from app.routes.upload import router as upload_router
 from app.routes.download import router as download_router
 from app.routes.exams import router as exams_router
+from app.routes.site_activation import router as site_activation_router
 from app.db.database import Base, engine
 from app.routes import auth, admin
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,7 @@ from app.models import (
     Exam,
     Branch,
     Room,
+    SiteActivation,
 )
 
 app=FastAPI(
@@ -55,6 +57,7 @@ Base.metadata.drop_all(bind=engine, tables=[
     Exam.__table__,
     Branch.__table__,
     Room.__table__,
+    SiteActivation.__table__,
 ])
 
 Base.metadata.create_all(bind=engine)
@@ -74,5 +77,6 @@ v1_router.include_router(allocate_router)
 v1_router.include_router(download_router)
 v1_router.include_router(exams_router)
 v1_router.include_router(seat_allocations_router)
+v1_router.include_router(site_activation_router)
 
 app.include_router(v1_router)
