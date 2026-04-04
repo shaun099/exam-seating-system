@@ -8,6 +8,21 @@ from app.models.room import Room   # ✅ IMPORTANT
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
+# 📥 GET ALL ROOMS
+@router.get("/rooms")
+def get_rooms(db: Session = Depends(get_db)):
+    rooms = db.query(Room).all()
+
+    return [
+        {
+            "id": room.id,
+            "room_number": room.room_number,
+            "rows": room.rows,
+            "cols": room.cols
+        }
+        for room in rooms
+    ]
+
 
 # 📥 Upload Students
 @router.post("/students")
@@ -61,40 +76,18 @@ async def upload_rooms(
 
 # 🗑️ DELETE ROOM
 @router.delete("/rooms/{room_id}")
-def delete_room(
-    room_id: int,
-    db: Session = Depends(get_db)
-):
-    try:
-        room = db.query(Room).filter(Room.id == room_id).first()
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
+def delete_room(room_id: int, db: Session = Depends(get_db)):
+    print("DELETE ID RECEIVED:", room_id)
 
-        deleted_data = {
-            "id": room.id,
-            "roomId": room.roomId if hasattr(room, "roomId") else None,
-            "blockName": room.blockName if hasattr(room, "blockName") else None
-        }
+    room = db.query(Room).filter(Room.id == room_id).first()
 
-        db.delete(room)
-        db.commit()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
 
-        return {
-            "success": True,
-            "message": "Room deleted successfully",
-            "deleted_room": deleted_data
-        }
+    db.delete(room)
+    db.commit()
 
-    except HTTPException as e:
-        return JSONResponse(
-            status_code=e.status_code,
-            content={"success": False, "message": str(e.detail)},
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"Failed to delete room: {str(e)}"},
-        )
+    return {"message": "Room deleted successfully"}
 
 # 💾 CREATE ROOM
 @router.post("/rooms/create")
@@ -130,8 +123,9 @@ def create_room(room_data: RoomCreate, db: Session = Depends(get_db)):
             status_code=500,
             content={"success": False, "message": f"Failed to create room: {str(e)}"},
         )
-# ✏️ UPDATE ROOM
 
+
+# ✏️ UPDATE ROOM
 @router.put("/rooms/{room_id}")
 def update_room(room_id: int, updated_data: dict, db: Session = Depends(get_db)):
     try:

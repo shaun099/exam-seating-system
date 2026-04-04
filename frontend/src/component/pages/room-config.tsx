@@ -1,23 +1,9 @@
-
 "use client";
 
-import { useState, useRef } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/component/ui/card";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Card, CardContent } from "@/component/ui/card";
 import { Button } from "@/component/ui/button";
-import { 
-  Pencil,
-  Trash2,
-  Plus,
-  Building2,
-  Users,
-  LayoutGrid,
-  Upload,
-  FileSpreadsheet
-  
-} from "lucide-react";
+import { Pencil, Trash2, Plus, Search } from "lucide-react";
 import { RoomDetails } from "./roomdetails";
 
 interface RoomRecord {
@@ -29,123 +15,201 @@ interface RoomRecord {
   capacity: number;
 }
 
-export function RoomConfig() {
-  const [rooms, setRooms] = useState<RoomRecord[]>([
-    { id: "1", roomId: "R001", blockName: "Block A", rows: 6, columns: 5, capacity: 30 },
-    { id: "2", roomId: "R002", blockName: "Block A", rows: 6, columns: 5, capacity: 30 },
-    { id: "3", roomId: "R003", blockName: "Block B", rows: 5, columns: 6, capacity: 30 },
-    { id: "4", roomId: "R004", blockName: "Block B", rows: 6, columns: 5, capacity: 30 },
-    { id: "5", roomId: "R005", blockName: "Block C", rows: 8, columns: 4, capacity: 32 },
-    { id: "6", roomId: "R006", blockName: "Block C", rows: 6, columns: 5, capacity: 30 },
-    { id: "7", roomId: "R007", blockName: "Block D", rows: 5, columns: 5, capacity: 25 },
-    { id: "8", roomId: "R008", blockName: "Block D", rows: 6, columns: 6, capacity: 36 }
-  ]);
+interface ApiRoom {
+  id: number;
+  room_number: string;
+  rows: number;
+  cols: number;
+}
 
+export default function RoomConfig() {
+  const [rooms, setRooms] = useState<RoomRecord[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [showRoomDetails, setShowRoomDetails] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomRecord | null>(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const totalRooms = rooms.length;
-  const totalCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
-  const avgPerRoom = totalRooms > 0 ? Math.round(totalCapacity / totalRooms) : 0;
+  // ✅ FETCH ROOMS
+  const fetchRooms = async (): Promise<RoomRecord[]> => {
+    const res = await fetch("http://127.0.0.1:8000/api/v1/upload/rooms");
+    const data: ApiRoom[] = await res.json();
 
-  const handleEditRoom = (roomId: string) => {
-    const room = rooms.find(r => r.id === roomId);
-    if (room) { setSelectedRoom(room); setShowRoomDetails(true); }
+    return data
+      .sort((a, b) => a.id - b.id)   // 🔥 FIX (VERY IMPORTANT)
+      .map((room) => ({
+        id: room.id.toString(),
+        roomId: room.room_number,
+        blockName: "Block",
+        rows: room.rows,
+        columns: room.cols,
+        capacity: room.rows * room.cols,
+      }));
   };
 
-  const handleDeleteRoom = (roomId: string) => {
-    if (confirm("Are you sure you want to delete this room?")) {
-      setRooms(rooms.filter(room => room.id !== roomId));
+  const refreshRooms = async () => {
+    const formatted = await fetchRooms();
+    setRooms(formatted);
+  };
+
+  useEffect(() => {
+    const loadRooms = async () => {
+      const formatted = await fetchRooms();
+      setRooms(formatted);
+    };
+
+    void loadRooms();
+  }, []);
+
+  // 🔍 SEARCH
+  const filteredRooms = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
+    return rooms.filter((room) =>
+      room.roomId.toLowerCase().includes(searchLower)
+    );
+  }, [searchTerm, rooms]);
+
+  // 📊 STATS
+  const totalRooms = filteredRooms.length;
+  const totalCapacity = filteredRooms.reduce((sum, r) => sum + r.capacity, 0);
+  const avgPerRoom = totalRooms
+    ? Math.round(totalCapacity / totalRooms)
+    : 0;
+
+  // 📥 CSV UPLOAD
+  const handleFileSelect = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    await fetch("http://127.0.0.1:8000/api/v1/upload/rooms", {
+      method: "POST",
+      body: formData,
+    });
+
+    alert("CSV uploaded ✅");
+    refreshRooms();
+  };
+
+  // ✏️ EDIT
+  const handleEditRoom = (id: string) => {
+    const room = rooms.find((r) => r.id === id);
+    if (room) {
+      setSelectedRoom(room);
+      setShowRoomDetails(true);
     }
   };
 
+  // 🗑️ DELETE
+  const handleDeleteRoom = async (roomId: string) => {
+  const confirmDelete = window.confirm("Are you sure you want to delete this room?");
+
+  if (!confirmDelete) return;
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:8000/api/v1/upload/rooms/${Number(roomId)}`,
+      { method: "DELETE" }
+    );
+
+    if (!res.ok) {
+      alert("Failed to delete room ❌");
+      return;
+    }
+
+    alert("Room deleted successfully ✅");
+
+    await refreshRooms();
+
+  } catch (err) {
+    console.error(err);
+    alert("Error deleting room ❌");
+  }
+};
+     
+  // ➕ ADD
   const handleAddNewRoom = () => {
-    const newRoom: RoomRecord = {
-      id: `${Date.now()}`,
-      roomId: `R${String(rooms.length + 1).padStart(3, '0')}`,
-      blockName: "New Block", rows: 6, columns: 5, capacity: 30
-    };
-    setSelectedRoom(newRoom);
+    setSelectedRoom({
+      id: "",
+      roomId: "",
+      blockName: "",
+      rows: 6,
+      columns: 5,
+      capacity: 30,
+    });
     setShowRoomDetails(true);
   };
 
-  const handleFileSelect = (file: File) => {
-    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-      alert("Please upload a valid CSV file"); return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size exceeds 5MB limit"); return;
-    }
-    setUploadedFile(file);
-    parseCSV(file);
-  };
+  // 💾 SAVE
+  const handleSaveRoomDetails = async (updatedRoom: any) => {
+    try {
+      console.log("FORM DATA:", updatedRoom); // 🔥 DEBUG
 
-  const parseCSV = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const lines = text.split("\n");
-        const records: RoomRecord[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (line) {
-            const [roomId, blockName, rows, columns, capacity] = line.split(",");
-            if (!roomId || !blockName || !rows || !columns || !capacity) continue;
-            records.push({
-              id: `csv_${Date.now()}_${i}`,
-              roomId: roomId.trim(), blockName: blockName.trim(),
-              rows: parseInt(rows) || 6, columns: parseInt(columns) || 5,
-              capacity: parseInt(capacity) || 30,
-            });
-          }
-        }
-        if (records.length === 0) { alert("No valid data found in CSV file"); return; }
-        setRooms(records);
-        setShowUploadModal(false);
-        setUploadedFile(null);
-        alert(`Successfully imported ${records.length} rooms!`);
-      } catch (error) {
-        console.error("Error parsing CSV:", error);
-        alert("Error reading CSV file. Please check the format.");
+      const payload = {
+        roomId: (updatedRoom.hallName || "").trim(),
+        rows: Number(updatedRoom.rows) || 0,        // ✅ FIX
+        columns: Number(updatedRoom.columns) || 0   // ✅ FIX
+      };
+
+      console.log("SENDING PAYLOAD:", payload); // 🔥 DEBUG
+
+      if (!payload.roomId) {
+        alert("Room name required ❌");
+        return;
       }
-    };
-    reader.readAsText(file);
-  };
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileSelect(file);
-  };
+      if (payload.rows <= 0 || payload.columns <= 0) {
+        alert("Rows & Columns must be > 0 ❌");
+        return;
+      }
 
-  const handleSaveRoomDetails = (updatedRoom: { id: string; hallName?: string; building?: string; capacity?: number }) => {
-    const existingRoom = rooms.find(r => r.id === updatedRoom.id);
-    if (existingRoom) {
-      setRooms(rooms.map(room => room.id === updatedRoom.id ? {
-        ...room,
-        roomId: updatedRoom.hallName || room.roomId,
-        blockName: updatedRoom.building || room.blockName,
-        capacity: updatedRoom.capacity || room.capacity
-      } : room));
-    } else {
-      setRooms([...rooms, {
-        id: updatedRoom.id || `${Date.now()}`,
-        roomId: updatedRoom.hallName || `R${String(rooms.length + 1).padStart(3, '0')}`,
-        blockName: updatedRoom.building || "New Block",
-        rows: 6, columns: 5, capacity: updatedRoom.capacity || 30
-      }]);
+      const res = await fetch("http://127.0.0.1:8000/api/v1/upload/rooms/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errTEXT = await res.text();
+        console.error("BD ERROR:", errTEXT);
+        alert(errTEXT);
+        return;
+      }
+
+      alert("Room added successfully ✅");
+
+      setRooms(prevRooms =>
+  prevRooms.map(room =>
+    room.id === updatedRoom.id
+      ? {
+          ...room,
+          roomId: updatedRoom.hallName,
+          rows: updatedRoom.rows,
+          columns: updatedRoom.columns,
+          capacity: updatedRoom.rows * updatedRoom.columns
+        }
+      : room
+  )
+);
+
+
+
+      setShowRoomDetails(false);
+      setSelectedRoom(null);
+
+    } catch (err) {
+      console.error(err);
     }
-    setShowRoomDetails(false);
-    setSelectedRoom(null);
   };
 
+  const clearSearch = () => {
+    setSearchTerm("");
+    searchInputRef.current?.focus();
+  };
+
+  // 🔄 NAVIGATION
   if (showRoomDetails && selectedRoom) {
     return (
       <RoomDetails
@@ -154,215 +218,165 @@ export function RoomConfig() {
         capacity={selectedRoom.capacity}
         building={selectedRoom.blockName}
         onSave={handleSaveRoomDetails}
-        onBack={() => { setShowRoomDetails(false); setSelectedRoom(null); }}
+        onBack={() => {
+          setShowRoomDetails(false);
+          setSelectedRoom(null);
+        }}
       />
     );
   }
 
   return (
-    // ✅ absolute fills the viewport area after navbar (top-16) and sidebar (left-64)
-    // overflow-y-auto is the scrollable container — the page scrolls here, not in a box
-    <div className="absolute top-16 left-64 right-0 bottom-0 overflow-y-auto bg-gray-50">
-      <div className="p-6 flex flex-col gap-6">
+    <div className="h-screen overflow-y-auto bg-gray-50">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto pb-12">
+        {/* HEADER */}
+        <div className="flex justify-between items-center flex-wrap gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">Room Configuration</h1>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Room Configuration</h1>
-            <p className="text-gray-600 mt-1">Manage examination rooms and their seating capacity</p>
-          </div>
           <div className="flex gap-2">
-            <Button
-              onClick={() => setShowUploadModal(true)}
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <Upload className="w-4 h-4 mr-2" />
+            <Button onClick={() => fileInputRef.current?.click()}>
               Import CSV
             </Button>
-            <Button onClick={handleAddNewRoom} className="bg-gray-900 text-white hover:bg-gray-800">
+
+            <Button onClick={handleAddNewRoom}>
               <Plus className="w-4 h-4 mr-2" />
-              Add New Room
+              Add Room
             </Button>
           </div>
         </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="border border-gray-200 shadow-sm">
+        {/* FILE INPUT */}
+        <input
+          type="file"
+          hidden
+          ref={fileInputRef}
+          accept=".csv"
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              handleFileSelect(e.target.files[0]);
+            }
+          }}
+        />
+
+        {/* SEARCH BAR */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search rooms..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchTerm && (
+            <button
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* STATS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-blue-600" />
+              <div className="text-sm text-gray-600 mb-1">Total Rooms</div>
+              <div className="text-3xl font-bold text-gray-900">{totalRooms}</div>
+              {searchTerm && rooms.length > 0 && (
+                <div className="text-xs text-gray-400 mt-1">
+                  of {rooms.length} total
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Rooms</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalRooms}</p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
-
-          <Card className="border border-gray-200 shadow-sm">
+          
+          <Card>
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-green-600" />
+              <div className="text-sm text-gray-600 mb-1">Total Capacity</div>
+              <div className="text-3xl font-bold text-gray-900">{totalCapacity}</div>
+              {searchTerm && rooms.length > 0 && (
+                <div className="text-xs text-gray-400 mt-1">
+                  of {rooms.reduce((sum, r) => sum + r.capacity, 0)} total
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Capacity</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalCapacity}</p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
-
-          <Card className="border border-gray-200 shadow-sm">
+          
+          <Card>
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <LayoutGrid className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Avg. per Room</p>
-                  <p className="text-3xl font-bold text-gray-900">{avgPerRoom}</p>
-                </div>
-              </div>
+              <div className="text-sm text-gray-600 mb-1">Average per Room</div>
+              <div className="text-3xl font-bold text-gray-900">{avgPerRoom}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* All Rooms Table */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">All Rooms</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Room ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Block Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Rows</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Columns</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Total Capacity</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rooms.map((room, index) => (
-                    <tr
-                      key={room.id}
-                      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                        index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                      }`}
-                    >
-                      <td className="py-3 px-4 text-sm text-gray-900">{room.roomId}</td>
-                      <td className="py-3 px-4 text-sm text-gray-700">{room.blockName}</td>
-                      <td className="py-3 px-4 text-sm text-gray-700">{room.rows}</td>
-                      <td className="py-3 px-4 text-sm text-gray-700">{room.columns}</td>
-                      <td className="py-3 px-4 text-sm text-gray-900 font-medium">{room.capacity}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditRoom(room.id)}
-                            className="p-1.5 hover:bg-gray-200 rounded transition-colors"
-                            title="Edit Room"
-                          >
-                            <Pencil className="w-4 h-4 text-gray-600" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="p-1.5 hover:bg-red-100 rounded transition-colors"
-                            title="Delete Room"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* TABLE */}
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b sticky top-0">
+                <tr>
+                  <th className="text-left p-4 font-semibold text-gray-700">Room</th>
+                  <th className="text-left p-4 font-semibold text-gray-700">Rows</th>
+                  <th className="text-left p-4 font-semibold text-gray-700">Cols</th>
+                  <th className="text-left p-4 font-semibold text-gray-700">Capacity</th>
+                  <th className="text-left p-4 font-semibold text-gray-700">Actions</th>
+                </tr>
+              </thead>
 
-            {rooms.length === 0 && (
-              <div className="text-center py-12">
-                <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-900 font-medium">No rooms configured</p>
-                <p className="text-sm text-gray-600 mt-1">Click "Add New Room" to create your first room</p>
+              <tbody>
+                {filteredRooms.map((room) => (
+                  <tr key={room.id} className="border-b hover:bg-gray-50">
+                    <td className="p-4 text-gray-900">{room.roomId}</td>
+                    <td className="p-4 text-gray-900">{room.rows}</td>
+                    <td className="p-4 text-gray-900">{room.columns}</td>
+                    <td className="p-4 text-gray-900">{room.capacity}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditRoom(room.id)}
+                          className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                          aria-label="Edit room"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRoom(room.id)}
+                          className="p-1 text-red-600 hover:text-red-800 transition-colors"
+                          aria-label="Delete room"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {filteredRooms.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                {searchTerm ? (
+                  <div>
+                    <p>No rooms found matching "{searchTerm}"</p>
+                    <button
+                      onClick={clearSearch}
+                      className="mt-2 text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <p>No rooms configured yet. Click "Add Room" or "Import CSV" to get started.</p>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
-
       </div>
-
-      {/* CSV Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Import Rooms from CSV</h3>
-              <p className="text-sm text-gray-600 mt-1">Upload a CSV file with room data</p>
-            </div>
-
-            <div className="p-6">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
-                className="hidden"
-              />
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-                  isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
-                }`}
-              >
-                <Upload className={`w-12 h-12 mx-auto mb-4 ${isDragging ? "text-blue-600" : "text-gray-400"}`} />
-                <p className="text-sm text-gray-900 font-medium mb-1">
-                  {isDragging ? "Drop your CSV file here" : "Drag and drop CSV file here"}
-                </p>
-                <p className="text-xs text-gray-600">or click to browse</p>
-                <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
-              </div>
-
-              {uploadedFile && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-                  <FileSpreadsheet className="w-8 h-8 text-green-600" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-green-900">{uploadedFile.name}</p>
-                    <p className="text-xs text-green-700">{(uploadedFile.size / 1024).toFixed(2)} KB</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-800 font-medium mb-1">Expected CSV Format:</p>
-                <code className="text-xs text-blue-700 block bg-white p-2 rounded mt-2">
-                  Room ID, Block Name, Rows, Columns, Capacity<br/>
-                  R001, Block A, 6, 5, 30<br/>
-                  R002, Block B, 5, 6, 30
-                </code>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex gap-3">
-              <Button
-                onClick={() => { setShowUploadModal(false); setUploadedFile(null); }}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
