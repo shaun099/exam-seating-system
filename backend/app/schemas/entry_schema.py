@@ -38,6 +38,8 @@ class SeatingMatrix(BaseModel):
 
 
 class AllocationRequest(BaseModel):
+    exam_id:int
     slot: str
+    sem: str
     rows: int
     cols: int
