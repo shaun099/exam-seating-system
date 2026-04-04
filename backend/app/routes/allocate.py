@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.models.allocation import Allocation
-from app.models.seat_allocation import SeatAllocation
 from app.db.database import get_db
 from app.models.exam import Exam
 from app.services.allocation_service import AllocationService
@@ -57,7 +56,7 @@ def allocate_students(
 def _build_allocated_slots_summary(db: Session):
     try:
         rows = (
-            db.query(Allocation.slot, Allocation.semester, Exam.event_name)
+            db.query(Allocation.slot, Allocation.semester, Exam.event_name, Exam.date)
             .join(Exam, Allocation.exam_id == Exam.id)
             .distinct()
             .all()
@@ -70,20 +69,21 @@ def _build_allocated_slots_summary(db: Session):
             key = f"{row.semester}__{row.slot}"
             if key in seen:
                 continue
+
             seen.add(key)
             unique.append({
                 "event_name": row.event_name,
                 "slot": row.slot,
                 "semester": row.semester,
+                "date": row.date,
             })
 
         return {"data": unique}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @seat_allocations_router.get("/slots-summary")
 def get_allocated_slots_summary(db: Session = Depends(get_db)):
     return _build_allocated_slots_summary(db)
-
-
 
