@@ -140,7 +140,7 @@ class UploadService:
         }
 
         column_map = {
-            "student":     vice.get_column_name(normalized_columns, ["student", "name"]),
+            "student":     UploadService.get_column_name(normalized_columns, ["student", "name"]),
             "reg_no":      UploadService.get_column_name(normalized_columns, ["reg_no", "register_no", "registration_no"]),
             "branch_name": UploadService.get_column_name(normalized_columns, ["branch_name", "branch"]),
             "course":      UploadService.get_column_name(normalized_columns, ["course", "course_name"]),
