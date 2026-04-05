@@ -75,7 +75,7 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
     { label: "Class Matrix Preview" },
   ],  
 
-  email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
+  "site-activation": [{ label: "Home", href: "/" }, { label: "Site Activation" }],
 };
 
 function App() {
@@ -161,8 +161,8 @@ function App() {
           />
         );
 
-      case "email":
-        return <EmailNotifications />;
+      case "site-activation":
+        return <SiteActivation />;
 
       case "room-config":
         return <RoomConfig />;

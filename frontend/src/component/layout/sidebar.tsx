@@ -26,7 +26,7 @@ const navItems = [
   { id: "invigilator", label: "Invigilator Mgmt", icon: Users },
   { id: "configurations", label: "Configurations", icon: Settings },
   { id: "reports", label: "Reports", icon: FileText },
-  { id: "email", label: "Email Notifications", icon: ClipboardList },
+  { id: "site-activation", label: "Site Activation", icon: ClipboardList },
 ];
 
 export function Sidebar({ currentPage, onNavigate, onLogout }: SidebarProps) {
