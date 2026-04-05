@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
 import { Label } from "../../ui/label"
@@ -13,6 +13,8 @@ import {
 } from "../../ui/select"
 import { Alert, AlertDescription, AlertTitle } from "../../ui/alert"
 import { Info, Settings, ArrowRight } from "lucide-react"
+
+const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix"
 
 interface SessionDetailsProps {
   config: {
@@ -34,6 +36,70 @@ export function SessionDetails({
 }: SessionDetailsProps) {
   const [batchType, setBatchType] = useState("")
   const [examMode, setExamMode] = useState("")
+  const [displayConfig, setDisplayConfig] = useState(config)
+
+  const getLatestDisplayConfig = () => {
+    const fallbackRows = config.rows > 0 ? config.rows : 6
+    const fallbackCols = config.columns > 0 ? config.columns : 5
+
+    try {
+      const raw = localStorage.getItem(SEATING_DEFAULTS_STORAGE_KEY)
+      if (!raw) {
+        return {
+          ...config,
+          rows: fallbackRows,
+          columns: fallbackCols,
+          maxCapacity: fallbackRows * fallbackCols,
+        }
+      }
+
+      const parsed = JSON.parse(raw) as { rows?: number; cols?: number }
+      const rows = Number(parsed.rows)
+      const cols = Number(parsed.cols)
+      const resolvedRows = Number.isFinite(rows) && rows > 0 ? rows : fallbackRows
+      const resolvedCols = Number.isFinite(cols) && cols > 0 ? cols : fallbackCols
+
+      return {
+        ...config,
+        rows: resolvedRows,
+        columns: resolvedCols,
+        maxCapacity: resolvedRows * resolvedCols,
+      }
+    } catch {
+      return {
+        ...config,
+        rows: fallbackRows,
+        columns: fallbackCols,
+        maxCapacity: fallbackRows * fallbackCols,
+      }
+    }
+  }
+
+  useEffect(() => {
+    setDisplayConfig(getLatestDisplayConfig())
+  }, [config.rows, config.columns, config.maxCapacity, config.interleaving])
+
+  useEffect(() => {
+    const refreshDisplayConfig = () => {
+      setDisplayConfig(getLatestDisplayConfig())
+    }
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshDisplayConfig()
+      }
+    }
+
+    window.addEventListener("storage", refreshDisplayConfig)
+    window.addEventListener("focus", refreshDisplayConfig)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    return () => {
+      window.removeEventListener("storage", refreshDisplayConfig)
+      window.removeEventListener("focus", refreshDisplayConfig)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [config.rows, config.columns, config.maxCapacity, config.interleaving])
 
   const handleSubmit = () => {
     if (batchType && examMode) {
@@ -98,17 +164,17 @@ export function SessionDetails({
               <p>
                 Default Room Matrix:{" "}
                 <strong>
-                  {config.rows} Rows × {config.columns} Columns
+                  {displayConfig.rows} Rows × {displayConfig.columns} Columns
                 </strong>
               </p>
               <p>
                 Max Capacity per Room:{" "}
-                <strong>{config.maxCapacity} Students</strong>
+                <strong>{displayConfig.maxCapacity} Students</strong>
               </p>
               <p>
                 Department Interleaving:{" "}
                 <strong>
-                  {config.interleaving ? "Enabled" : "Disabled"}
+                  {displayConfig.interleaving ? "Enabled" : "Disabled"}
                 </strong>
               </p>
             </div>

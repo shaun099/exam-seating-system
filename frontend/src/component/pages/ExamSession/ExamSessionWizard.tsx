@@ -7,6 +7,27 @@ import { DataImportKTU } from "./DataImportKTU"
 import { DataImportAutonomous } from "./DataImportAutonomous"
 import Preview from "./Preview"
 
+const SEATING_DEFAULTS_STORAGE_KEY = "seating-default-matrix"
+
+const getSavedSeatingDefaults = () => {
+  const fallback = { rows: 6, cols: 5 }
+  try {
+    const raw = localStorage.getItem(SEATING_DEFAULTS_STORAGE_KEY)
+    if (!raw) return fallback
+
+    const parsed = JSON.parse(raw) as { rows?: number; cols?: number }
+    const rows = Number(parsed.rows)
+    const cols = Number(parsed.cols)
+
+    return {
+      rows: Number.isFinite(rows) && rows > 0 ? rows : fallback.rows,
+      cols: Number.isFinite(cols) && cols > 0 ? cols : fallback.cols,
+    }
+  } catch {
+    return fallback
+  }
+}
+
 interface ExamSessionWizardProps {
   onCancel: () => void;
   onNavigate: (page: string) => void; // This comes from App.tsx
@@ -16,6 +37,7 @@ export function ExamSessionWizard({ onCancel, onNavigate }: ExamSessionWizardPro
   const [step, setStep] = useState<"details" | "import" | "preview">("details")
   const [sessionConfig, setSessionConfig] = useState<any>(null)
   const [uploadPayload, setUploadPayload] = useState<any>(null)
+  const seatingDefaults = getSavedSeatingDefaults()
 
   const uploadStudentsFiles = async (files: File[]) => {
     const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
@@ -46,7 +68,12 @@ export function ExamSessionWizard({ onCancel, onNavigate }: ExamSessionWizardPro
     <div className="container mx-auto py-8 max-w-4xl">
       {step === "details" && (
         <SessionDetails
-          config={{ rows: 6, columns: 5, maxCapacity: 30, interleaving: true }}
+          config={{
+            rows: seatingDefaults.rows,
+            columns: seatingDefaults.cols,
+            maxCapacity: seatingDefaults.rows * seatingDefaults.cols,
+            interleaving: true,
+          }}
           onSubmit={(data) => { setSessionConfig(data); setStep("import"); }}
           onCancel={onCancel}
           onNavigate={onNavigate}
