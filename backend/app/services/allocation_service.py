@@ -2,7 +2,6 @@ from collections import defaultdict, deque
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import case
-import heapq
 
 from app.models.seating import Seating
 from app.models.room import Room
@@ -19,11 +18,31 @@ class AllocationService:
     def allocate(slot: str, semester: str, rows: int, cols: int, db: Session):
         """
         Allocate seating for a specific semester + slot.
-        This prevents mixing students from different semesters (e.g., S4 Slot A and S5 Slot A).
+
+        Rules:
+        - Columns filled top to bottom, one at a time.
+        - Each column holds only one subject (course_id).
+        - No two adjacent columns may have the same course_id.
+        - Regular and supply of the same course_id are separate groups —
+          they cannot share a column or be in adjacent columns.
+        - All regular students seated first. Exception: if next regular
+          student shares exam_id with adjacent column and a supply student
+          with a different exam_id exists, use that supply student early.
+        - Mid-column switch: if subject runs out and more than 2 seats
+          remain, switch to a different subject. If 2 or fewer, leave empty.
+        - Each room is assigned exactly 2 subjects (the two with the most
+          students at the time that room starts). Only those 2 alternate
+          across columns in that room. If one runs out mid-room, the next
+          largest available subject replaces it as the new partner.
+        - One subject remaining globally: fill columns with one gap between.
+          Mixing regular+supply of that subject in one column is allowed.
+        - Adjacency fallback: if no different subject can start a new column,
+          leave one gap then reuse same subject.
+        - Adjacency resets between rooms.
         """
 
         # ------------------------------------------------------------------ #
-        # STEP 1: FETCH ELIGIBLE STUDENTS FOR GIVEN SEMESTER + SLOT
+        # STEP 1: FETCH ELIGIBLE STUDENTS
         # ------------------------------------------------------------------ #
         entries = (
             db.query(
@@ -40,7 +59,7 @@ class AllocationService:
             .join(Exam, Seating.exam_id == Exam.id)
             .filter(
                 Seating.slot == slot,
-                Exam.event_name.contains(f" {semester} "),  # ← replaces Exam.semester == semester
+                Exam.event_name.contains(f" {semester} "),
                 Seating.is_eligible == True,
                 Exam.event_name.regexp_match(r'\((R|S)[,)]'),
             )
@@ -64,10 +83,9 @@ class AllocationService:
         # ------------------------------------------------------------------ #
         existing = (
             db.query(Allocation)
-            .filter(Allocation.slot == slot,Allocation.semester == semester)
+            .filter(Allocation.slot == slot, Allocation.semester == semester)
             .first()
         )
-
         if existing:
             db.query(SeatAllocation).filter(
                 SeatAllocation.allocation_id == existing.id
@@ -76,7 +94,7 @@ class AllocationService:
             db.flush()
 
         # ------------------------------------------------------------------ #
-        # STEP 2: GROUP BY EXAM → COURSE, SORT BY (DEPT, YEAR, NUM)
+        # STEP 2: GROUP AND SORT STUDENTS
         # ------------------------------------------------------------------ #
 
         def extract_sort_key(reg_no: str):
@@ -85,7 +103,7 @@ class AllocationService:
                 i += 1
             if i >= len(reg_no):
                 return (reg_no, 0, 0)
-            year = int(reg_no[i:i+2])
+            year = int(reg_no[i:i + 2])
             i += 2
             j = i
             while j < len(reg_no) and reg_no[j].isalpha():
@@ -122,34 +140,94 @@ class AllocationService:
         regular_groups, supply_groups = group_and_split(entries)
 
         # ------------------------------------------------------------------ #
-        # STEP 3: BUILD STUDENT MAP + SINGLE COMBINED HEAP
+        # STEP 3: BUILD MAPS
+        #
+        # regular_map : course_id              -> deque of students
+        # supply_map  : (exam_id, course_id)   -> deque of students
+        #
+        # We scan maps directly instead of using a heap to avoid stale
+        # count bugs that caused students to be left unallocated.
         # ------------------------------------------------------------------ #
-        student_map = {}
-        heap = []
+        regular_map = {}
+        supply_map = {}
 
-        # Regular — flatten by course_id
         flat_regular = defaultdict(deque)
         for eid, courses in regular_groups.items():
             for cid, students in courses.items():
                 flat_regular[cid].extend(students)
 
         for cid, students in flat_regular.items():
-            student_map[cid] = students
-            heapq.heappush(heap, (-len(students), 0, cid))
+            regular_map[cid] = students
 
-        # Supply — keep (eid, course_id) as key
         for eid, courses in supply_groups.items():
             for cid, students in courses.items():
-                key = (eid, cid)
-                student_map[key] = students
-                heapq.heappush(heap, (-len(students), 1, key))
+                supply_map[(eid, cid)] = students
+
+        # ------------------------------------------------------------------ #
+        # HELPERS
+        # ------------------------------------------------------------------ #
+
+        def get_course_id(key):
+            """course_id from a regular key (int) or supply key (tuple)."""
+            if isinstance(key, tuple):
+                return key[1]
+            return key
+
+        def peek_exam_id(q):
+            """exam_id of next student without removing from deque."""
+            if not q:
+                return None
+            return q[0].exam_id
+
+        def pick_best(active_map, exclude_course_ids=None,
+                      restrict_course_ids=None, force=False):
+            """
+            Return the key with the most students, subject to:
+
+            exclude_course_ids  : course_ids to skip (adjacency / same-subject).
+            restrict_course_ids : if given, only consider keys whose course_id
+                                  is in this set (used to enforce 2-per-room).
+            force               : if True, ignore exclude_course_ids entirely.
+                                  restrict_course_ids still applies.
+            """
+            if exclude_course_ids is None:
+                exclude_course_ids = set()
+
+            best_key = None
+            best_count = 0
+
+            for key, q in active_map.items():
+                if not q:
+                    continue
+                cid = get_course_id(key)
+                if restrict_course_ids is not None and cid not in restrict_course_ids:
+                    continue
+                if not force and cid in exclude_course_ids:
+                    continue
+                if len(q) > best_count:
+                    best_count = len(q)
+                    best_key = key
+
+            return best_key
+
+        def count_active_course_ids(active_map):
+            """Number of distinct course_ids that still have students."""
+            return len({get_course_id(k) for k, q in active_map.items() if q})
+
+        def any_remaining(active_map):
+            return any(len(q) > 0 for q in active_map.values())
+
+        def total_remaining():
+            return (
+                sum(len(q) for q in regular_map.values()) +
+                sum(len(q) for q in supply_map.values())
+            )
 
         # ------------------------------------------------------------------ #
         # STEP 4A: FETCH ROOMS
         # ------------------------------------------------------------------ #
         date_sessions = list({(e.date, e.session) for e in entries})
 
-        # Find conflicting allocations — different semester, same date+session
         conflicting_allocation_ids = (
             db.query(Allocation.id)
             .join(Exam, Allocation.exam_id == Exam.id)
@@ -169,7 +247,6 @@ class AllocationService:
                 .all()
             )
             used_room_ids = {r[0] for r in used_room_ids}
-
             rooms = (
                 db.query(Room)
                 .filter(
@@ -199,165 +276,316 @@ class AllocationService:
             )
 
         # ------------------------------------------------------------------ #
-        # STEP 4B: CREATE ALLOCATION ENTRY
+        # STEP 4B: CREATE ALLOCATION RECORD
         # ------------------------------------------------------------------ #
         allocation_exam_id = entries[0].exam_id
-        allocation = Allocation(exam_id=allocation_exam_id, slot=slot, semester=semester)
+        allocation = Allocation(
+            exam_id=allocation_exam_id, slot=slot, semester=semester
+        )
         db.add(allocation)
         db.flush()
 
         # ------------------------------------------------------------------ #
-        # STEP 5: ALLOCATION LOOP (unchanged from your original)
+        # STEP 5: ALLOCATION LOOP
         # ------------------------------------------------------------------ #
         seat_objects = []
         room_index = 0
 
-        active_primary = None
-        active_secondary = None
+        # ------------------------------------------------------------------ #
+        # fill_column: seat students in one column top to bottom
+        # ------------------------------------------------------------------ #
+        def fill_column(room, col, chosen_key, active_map, last_col_cid,
+                        only_one_subject, room_subjects=None):
+            """
+            Fill a single column top to bottom starting with chosen_key.
 
-        def pop_from_heap(exclude_key=None):
-            skipped = []
-            result = None
-            while heap:
-                entry = heapq.heappop(heap)
-                key = entry[2]
-                students = student_map.get(key)
-                if not students:
-                    continue
-                if key == exclude_key:
-                    skipped.append(entry)
-                    continue
-                result = key
-                break
-            for e in skipped:
-                heapq.heappush(heap, e)
-            return result
+            chosen_key      : key of the subject to start with.
+            active_map      : map to pull students from.
+            last_col_cid    : course_id of the previous column (used to
+                              block same-subject mid-column switches).
+            only_one_subject: True when only one subject exists globally —
+                              no switching allowed.
+            room_subjects   : set of course_ids assigned to this room. When
+                              given, mid-column switches are restricted to
+                              this set before falling back to any subject.
 
-        def refill():
-            nonlocal active_primary, active_secondary
+            Returns the course_id last used in this column.
+            """
+            cur_key = chosen_key
+            last_used_cid = get_course_id(chosen_key)
 
-            if active_primary is not None and not student_map.get(active_primary):
-                active_primary = None
-            if active_secondary is not None and not student_map.get(active_secondary):
-                active_secondary = None
+            for row in range(rows):
+                q = active_map.get(cur_key)
 
-            if active_primary is None:
-                active_primary = pop_from_heap(exclude_key=active_secondary)
-
-            if active_secondary is None:
-                active_secondary = pop_from_heap(exclude_key=active_primary)
-
-            # Fallback scan
-            if active_primary is None:
-                for key, q in student_map.items():
-                    if q and key != active_secondary:
-                        active_primary = key
+                if not q:
+                    remaining_seats = rows - row
+                    if remaining_seats <= 2:
+                        # Too few seats — leave them empty
                         break
 
-            if active_secondary is None:
-                for key, q in student_map.items():
-                    if q and key != active_primary:
-                        active_secondary = key
+                    if only_one_subject:
+                        # No other subject to switch to
                         break
 
-        # Initial fill
-        refill()
+                    # Build exclusion: must differ from cur subject AND
+                    # last column's subject.
+                    exclude = {get_course_id(cur_key)}
+                    if last_col_cid is not None:
+                        exclude.add(last_col_cid)
 
-        while (active_primary is not None or active_secondary is not None) and room_index < len(rooms):
-            room = rooms[room_index]
-            room_index += 1
-
-            if active_primary is not None and active_secondary is not None:
-                cnt_p = len(student_map.get(active_primary, []))
-                cnt_s = len(student_map.get(active_secondary, []))
-                if cnt_s > cnt_p:
-                    active_primary, active_secondary = active_secondary, active_primary
-                primary = active_primary
-                secondary = active_secondary
-            elif active_primary is not None:
-                primary = active_primary
-                secondary = None
-            else:
-                primary = active_secondary
-                secondary = None
-
-            last_col_subject = None
-
-            for col in range(cols):
-                if secondary is None:
-                    col_subject = primary
-                    other_subject = None
-                else:
-                    natural = primary if col % 2 == 0 else secondary
-                    natural_other = secondary if col % 2 == 0 else primary
-
-                    if last_col_subject == natural:
-                        if student_map.get(natural_other):
-                            col_subject = natural_other
-                            other_subject = natural
-                        else:
-                            fresh = pop_from_heap(exclude_key=natural)
-                            if fresh is not None:
-                                col_subject = fresh
-                                other_subject = natural
-                                secondary = fresh
-                                active_secondary = fresh
-                            else:
-                                col_subject = natural
-                                other_subject = None
-                    else:
-                        col_subject = natural
-                        other_subject = natural_other
-
-                cur_subject = col_subject
-                last_row_subj = col_subject
-
-                for row in range(rows):
-                    students = student_map.get(cur_subject)
-
-                    if not students:
-                        remaining_seats = rows - row
-                        if remaining_seats < 3:
-                            break
-
-                        new_subject = pop_from_heap(exclude_key=cur_subject)
-                        if new_subject is None:
-                            break
-
-                        cur_subject = new_subject
-                        secondary = new_subject
-                        active_secondary = new_subject
-                        students = student_map.get(cur_subject)
-
-                        if not students:
-                            break
-
-                    last_row_subj = cur_subject
-
-                    e = students.popleft()
-                    seat_objects.append(
-                        SeatAllocation(
-                            allocation_id=allocation.id,
-                            room_id=room.id,
-                            row=row,
-                            col=col,
-                            student_id=e.student_id,
-                            course_id=e.course_id,
+                    # First try within room_subjects
+                    new_key = None
+                    if room_subjects is not None:
+                        new_key = pick_best(
+                            active_map,
+                            exclude_course_ids=exclude,
+                            restrict_course_ids=room_subjects
                         )
+
+                    # Fall back to any subject if room_subjects gave nothing
+                    if new_key is None:
+                        new_key = pick_best(
+                            active_map,
+                            exclude_course_ids=exclude
+                        )
+
+                    if new_key is None:
+                        # Only one other subject exists but it matches last_col.
+                        # Use it as absolute last resort (Rule 11).
+                        sole_key = None
+                        cur_cid = get_course_id(cur_key)
+                        for k, dq in active_map.items():
+                            if dq and get_course_id(k) != cur_cid:
+                                sole_key = k
+                                break
+                        if sole_key is None:
+                            break  # nothing left — stop column
+                        new_key = sole_key
+
+                    cur_key = new_key
+                    last_used_cid = get_course_id(cur_key)
+                    q = active_map.get(cur_key)
+                    if not q:
+                        break
+
+                e = q.popleft()
+                last_used_cid = get_course_id(cur_key)
+                seat_objects.append(
+                    SeatAllocation(
+                        allocation_id=allocation.id,
+                        room_id=room.id,
+                        row=row,
+                        col=col,
+                        student_id=e.student_id,
+                        course_id=e.course_id,
+                    )
+                )
+
+            return last_used_cid
+
+        # ------------------------------------------------------------------ #
+        # fill_rooms: iterate rooms and columns for one phase
+        # ------------------------------------------------------------------ #
+        def fill_rooms(active_map, supply_map_ref, start_ri, is_regular_phase):
+            """
+            Fill rooms for one phase (regular or supply).
+
+            active_map       : map being drained this phase.
+            supply_map_ref   : supply_map for Rule 5 exception during regular
+                               phase. Pass None for supply phase.
+            start_ri         : room index to start from.
+            is_regular_phase : True when processing regular students.
+
+            At the start of each room, the 2 course_ids with the most
+            students are assigned as the room pair. All column picks are
+            restricted to that pair. If one runs out completely, the next
+            largest subject replaces it as the new partner for that room.
+
+            Returns updated room index.
+            """
+            ri = start_ri
+
+            while ri < len(rooms) and any_remaining(active_map):
+                room = rooms[ri]
+                ri += 1
+
+                last_col_cid = None  # adjacency resets each room
+
+                # -------------------------------------------------------- #
+                # Assign 2 subjects for this room.
+                # Pick the largest, then the second largest (different cid).
+                # -------------------------------------------------------- #
+                p_key = pick_best(active_map)
+                if p_key is None:
+                    break
+                p_cid = get_course_id(p_key)
+
+                s_key = pick_best(active_map, exclude_course_ids={p_cid})
+                s_cid = get_course_id(s_key) if s_key else None
+
+                # room_subjects: course_ids allowed in this room
+                room_subjects = {p_cid}
+                if s_cid is not None:
+                    room_subjects.add(s_cid)
+
+                col = 0
+                while col < cols:
+                    if not any_remaining(active_map):
+                        break
+
+                    # ---------------------------------------------------- #
+                    # Refresh room_subjects: if a subject ran out, replace it
+                    # with the next largest subject not already in the room.
+                    # ---------------------------------------------------- #
+                    alive_in_room = {
+                        cid for cid in room_subjects
+                        if any(
+                            get_course_id(k) == cid and len(q) > 0
+                            for k, q in active_map.items()
+                        )
+                    }
+
+                    if len(alive_in_room) < len(room_subjects):
+                        # One subject exhausted — bring in a replacement
+                        replacement = pick_best(
+                            active_map,
+                            exclude_course_ids=room_subjects
+                        )
+                        if replacement is not None:
+                            room_subjects = alive_in_room | {
+                                get_course_id(replacement)
+                            }
+                        else:
+                            # No replacement outside room — use what is alive
+                            room_subjects = alive_in_room
+
+                    # ---------------------------------------------------- #
+                    # ONE SUBJECT REMAINING globally — gap rule.
+                    # ---------------------------------------------------- #
+                    if count_active_course_ids(active_map) == 1:
+                        chosen_key = pick_best(active_map)
+                        if chosen_key is None:
+                            break
+
+                        fill_column(
+                            room, col, chosen_key, active_map,
+                            last_col_cid, only_one_subject=True,
+                            room_subjects=None
+                        )
+                        last_col_cid = get_course_id(chosen_key)
+                        col += 1
+
+                        # Skip one gap column if students remain and space exists
+                        if any_remaining(active_map) and col < cols:
+                            col += 1
+
+                        continue
+
+                    # ---------------------------------------------------- #
+                    # NORMAL CASE: pick from room_subjects, avoid last col.
+                    # ---------------------------------------------------- #
+                    exclude = set()
+                    if last_col_cid is not None:
+                        exclude.add(last_col_cid)
+
+                    chosen_key = pick_best(
+                        active_map,
+                        exclude_course_ids=exclude,
+                        restrict_course_ids=room_subjects
                     )
 
-                last_col_subject = last_row_subj
+                    if chosen_key is None:
+                        # Both room subjects blocked by adjacency.
+                        # Leave a gap column then retry without exclusion.
+                        col += 1  # gap
+                        if col >= cols:
+                            break
+                        last_col_cid = None  # gap resets adjacency
+                        chosen_key = pick_best(
+                            active_map,
+                            restrict_course_ids=room_subjects,
+                            force=True
+                        )
+                        if chosen_key is None:
+                            break
 
-            # After room
-            active_primary = primary if student_map.get(primary) else None
-            active_secondary = secondary if student_map.get(secondary) else None
-            refill()
+                    # ---------------------------------------------------- #
+                    # RULE 5 EXCEPTION (regular phase only)
+                    # If next regular student shares exam_id with last
+                    # column's students and a supply student with a different
+                    # exam_id exists, seat that supply student early.
+                    # ---------------------------------------------------- #
+                    if (
+                        is_regular_phase
+                        and supply_map_ref is not None
+                        and last_col_cid is not None
+                        and not isinstance(chosen_key, tuple)  # is regular key
+                    ):
+                        next_eid = peek_exam_id(active_map.get(chosen_key))
+                        if next_eid is not None:
+                            last_col_eid = None
+                            for k, q in active_map.items():
+                                if get_course_id(k) == last_col_cid and q:
+                                    last_col_eid = peek_exam_id(q)
+                                    break
+
+                            if last_col_eid is not None and last_col_eid == next_eid:
+                                supply_choice = None
+                                for skey, sq in supply_map_ref.items():
+                                    if not sq:
+                                        continue
+                                    if get_course_id(skey) in exclude:
+                                        continue
+                                    if peek_exam_id(sq) != next_eid:
+                                        supply_choice = skey
+                                        break
+
+                                if supply_choice is not None:
+                                    last_col_cid = fill_column(
+                                        room, col, supply_choice,
+                                        supply_map_ref, last_col_cid,
+                                        only_one_subject=False,
+                                        room_subjects=None
+                                    )
+                                    col += 1
+                                    continue
+
+                    # ---------------------------------------------------- #
+                    # FILL THE COLUMN normally
+                    # ---------------------------------------------------- #
+                    last_col_cid = fill_column(
+                        room, col, chosen_key, active_map,
+                        last_col_cid, only_one_subject=False,
+                        room_subjects=room_subjects
+                    )
+                    col += 1
+
+            return ri
+
+        # ------------------------------------------------------------------ #
+        # RUN PHASE 1: REGULAR STUDENTS
+        # ------------------------------------------------------------------ #
+        room_index = fill_rooms(
+            regular_map,
+            supply_map,
+            room_index,
+            is_regular_phase=True
+        )
+
+        # ------------------------------------------------------------------ #
+        # RUN PHASE 2: SUPPLY STUDENTS
+        # ------------------------------------------------------------------ #
+        room_index = fill_rooms(
+            supply_map,
+            None,
+            room_index,
+            is_regular_phase=False
+        )
 
         # ------------------------------------------------------------------ #
         # STEP 6: FINAL CHECK
         # ------------------------------------------------------------------ #
-        remaining = sum(len(q) for q in student_map.values())
-
+        remaining = total_remaining()
         if remaining > 0:
             db.rollback()
             raise HTTPException(
@@ -373,8 +601,10 @@ class AllocationService:
 
         return {
             "success": True,
-            "message": f"Allocation completed for {semester} Slot {slot}. "
-                       f"Total students seated: {len(seat_objects)}",
+            "message": (
+                f"Allocation completed for {semester} Slot {slot}. "
+                f"Total students seated: {len(seat_objects)}"
+            ),
             "allocation_id": allocation.id,
             "total_rooms_used": room_index,
         }
