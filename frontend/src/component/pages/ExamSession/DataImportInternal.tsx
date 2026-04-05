@@ -33,6 +33,7 @@ const ALLOWED_MIME = [
   "application/vnd.ms-excel",
   "text/csv",
 ]
+const API_BASE_URL = import.meta.env.VITE_API_URL
 
 const getDeptFromText = (text: string, fallback = "") =>
   DEPT_PATTERNS.find((p) => p.pattern.test(text))?.dept ?? fallback
@@ -45,13 +46,28 @@ const parseBatchLine = (
   const semester = semesterMatch ? `S${semesterMatch[1]}` : defaults.semester
 
   const divisionMatch =
-    text.match(/division\s*[:.-]?\s*([A-Z]\d?)/i) ||
-    text.match(/\b([A-Z]\d?)\b\s*\(\s*S[1-8]\s*\)/i) ||
-    text.match(/\bS[1-8]\b\s*[-:/]\s*([A-Z]\d?)\b/i)
+    text.match(/\b(?:division|div)\s*[:.-]?\s*([A-Z]\d?)\b/i) ||
+    text.match(/\b\d{4}-\d{4}\s+([A-Z]\d?)\s*\(\s*S[1-8]\s*\)/i) ||
+    text.match(/\b\d{4}-\d{4}\s+([A-Z]\d?)\b/i)
   const division = divisionMatch ? divisionMatch[1].toUpperCase() : defaults.division
 
   const dept = getDeptFromText(text, defaults.dept)
-  return { dept, semester, division }
+
+  const subjectMatch =
+    text.match(/\b(?:subject|course)\s*[:.-]?\s*([^()|]+?)\s*(?:\(([^()]+)\))?(?=\s*(?:$|[,;|/]))/i) ||
+    text.match(/\b(?:subject|course)\s*[:.-]?\s*([^()]+?)\s*$/i)
+
+  const subjectName = subjectMatch ? subjectMatch[1].trim() : ""
+  const subjectCode = subjectMatch?.[2] ? subjectMatch[2].trim().toUpperCase() : ""
+
+  return { dept, semester, division, subjectName, subjectCode }
+}
+
+const isLikelyDataRow = (row: any[]): boolean => {
+  const text = (row ?? []).map((cell) => String(cell ?? "").trim()).join(" ").trim()
+  if (!text) return false
+
+  return !/\b(reg\s*no|reg\.?\s*no|registration|roll\s*no|name|branch|course|subject|semester|batch|division|s\.?\s*no|sl\.?\s*no)\b/i.test(text)
 }
 
 const isValidFile = (file: File) => {
@@ -122,8 +138,8 @@ export function DataImportInternal({
     setFetchError(null)
     try {
       const [subjectsRes, departmentsRes] = await Promise.all([
-        fetch("http://localhost:8000/api/v1/exams/subjects?batch=KTU"),
-        fetch("http://localhost:8000/api/v1/exams/departments?batch=KTU"),
+        fetch(`${API_BASE_URL}/api/v1/exams/subjects?batch=KTU`),
+        fetch(`${API_BASE_URL}/api/v1/exams/departments?batch=KTU`),
       ])
 
       if (!subjectsRes.ok) throw new Error(`Server returned ${subjectsRes.status}`)
@@ -188,7 +204,7 @@ export function DataImportInternal({
     const form = addForms[key] ?? { name: "", code: "" }
     if (!form.name.trim() || !form.code.trim()) return
 
-    await fetch("http://localhost:8000/api/v1/exams/subjects", {
+    await fetch(`${API_BASE_URL}/api/v1/exams/subjects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -210,7 +226,7 @@ export function DataImportInternal({
     if (!window.confirm(`Delete "${courseName}" (${courseCode})?`)) return
 
     const res = await fetch(
-      `http://localhost:8000/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=KTU`,
+      `${API_BASE_URL}/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=KTU`,
       { method: "DELETE" }
     )
     // FIX #10 — server now returns 404 for missing codes; surface it here
@@ -260,10 +276,6 @@ export function DataImportInternal({
       const globalDept = getDeptFromText(headerText, "")
       const globalSemMatch = headerText.match(/\bS([1-8])\b/i)
       const globalSemester = globalSemMatch ? `S${globalSemMatch[1]}` : ""
-      const globalDivMatch =
-        headerText.match(/division\s*[:.-]?\s*([A-Z]\d?)/i) ||
-        headerText.match(/\b([A-Z]\d?)\b\s*\(\s*S[1-8]\s*\)/i)
-      const globalDivision = globalDivMatch ? globalDivMatch[1].toUpperCase() : "NA"
 
       const blocks: { start: number; dept: string; sem: string; div: string }[] = []
       rows.forEach((row, idx) => {
@@ -272,7 +284,7 @@ export function DataImportInternal({
           const parsed = parseBatchLine(txt, {
             dept: globalDept,
             semester: globalSemester,
-            division: globalDivision,
+            division: "NA",
           })
           blocks.push({ start: idx, dept: parsed.dept, sem: parsed.semester, div: parsed.division })
         }
@@ -281,16 +293,21 @@ export function DataImportInternal({
       const perFileEntries: FileEntry[] = []
 
       if (blocks.length === 0) {
+        const parsed = parseBatchLine(headerText, {
+          dept: globalDept,
+          semester: globalSemester,
+          division: "NA",
+        })
         perFileEntries.push({
           id: Math.random().toString(36).substr(2, 9),
           file: f,
-          dept: globalDept,
-          semester: globalSemester,
-          division: globalDivision,
+          dept: parsed.dept,
+          semester: parsed.semester,
+          division: parsed.division,
           batch: "KTU",
-          subjectName: "",
-          subjectCode: "",
-          studentCount: rows.length,
+          subjectName: parsed.subjectName,
+          subjectCode: parsed.subjectCode,
+          studentCount: rows.filter(isLikelyDataRow).length,
           startRow: 0,
           endRow: rows.length,
         })
@@ -299,17 +316,23 @@ export function DataImportInternal({
           const end = blocks[i + 1]?.start ?? rows.length
           const count = rows
             .slice(meta.start + 1, end)
-            .filter((r) => (r ?? []).some((cell: any) => String(cell ?? "").trim() !== ""))
+            .filter(isLikelyDataRow)
             .length
-          perFileEntries.push({
-            id: Math.random().toString(36).substr(2, 9),
-            file: f,
+          const headerRowText = (rows[meta.start] ?? []).join(" ")
+          const parsed = parseBatchLine(headerRowText, {
             dept: meta.dept,
             semester: meta.sem,
             division: meta.div,
+          })
+          perFileEntries.push({
+            id: Math.random().toString(36).substr(2, 9),
+            file: f,
+            dept: parsed.dept,
+            semester: parsed.semester,
+            division: parsed.division,
             batch: "KTU",
-            subjectName: "",
-            subjectCode: "",
+            subjectName: parsed.subjectName,
+            subjectCode: parsed.subjectCode,
             studentCount: count,
             startRow: meta.start,
             endRow: end,
@@ -317,32 +340,8 @@ export function DataImportInternal({
         })
       }
 
-      // Merge repeated departments within one file into a single card
-      const groupedByDept = perFileEntries.reduce<Record<string, FileEntry>>((acc, entry) => {
-        const deptKey = entry.dept || "Unknown Department"
-        if (!acc[deptKey]) {
-          acc[deptKey] = { ...entry }
-        } else {
-          acc[deptKey].studentCount += entry.studentCount
-          acc[deptKey].startRow = Math.min(acc[deptKey].startRow, entry.startRow)
-          acc[deptKey].endRow = Math.max(acc[deptKey].endRow, entry.endRow)
-          if (!acc[deptKey].semester && entry.semester) acc[deptKey].semester = entry.semester
-          if ((!acc[deptKey].division || acc[deptKey].division === "NA") && entry.division) {
-            acc[deptKey].division = entry.division
-          } else if (
-            entry.division &&
-            acc[deptKey].division &&
-            acc[deptKey].division !== "NA" &&
-            entry.division !== "NA" &&
-            acc[deptKey].division !== entry.division
-          ) {
-            acc[deptKey].division = "Mixed"
-          }
-        }
-        return acc
-      }, {})
-
-      newEntries.push(...Object.values(groupedByDept))
+      // Keep each detected class block separate; do not merge by department.
+      newEntries.push(...perFileEntries)
     }
 
     // FIX #6 — merge newly detected departments without duplicates
@@ -515,7 +514,6 @@ export function DataImportInternal({
                         <option value="A">A</option>
                         <option value="B">B</option>
                         <option value="C">C</option>
-                        <option value="Mixed">Mixed</option>
                       </select>
 
                       <select
@@ -673,12 +671,20 @@ export function DataImportInternal({
                   type: "internal",
                   data: fileEntries.map((e) => ({
                     file: e.file,
+                    batch: e.batch,
+                    semester: e.semester,
+                    department: e.dept,
+                    division: e.division,
+                    subjectName: e.subjectName,
+                    subjectCode: e.subjectCode,
                     tags: {
                       file_name: e.file.name,
                       batch: e.batch,
                       semester: e.semester,
                       department: e.dept,
+                      subject_name: e.subjectName,
                       course_code: e.subjectCode,
+                      subject_code: e.subjectCode,
                       division: e.division,
                       student_count: e.studentCount,
                       startRow: e.startRow,

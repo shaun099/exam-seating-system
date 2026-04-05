@@ -87,7 +87,7 @@ export function ExamSessionWizard({ onCancel, onNavigate }: ExamSessionWizardPro
           ) : sessionConfig?.batchType === "ktu" ? (
             <DataImportKTU onUpload={(d) => { setUploadPayload(d); setStep("preview"); }} onBack={() => setStep("details")} />
           ) : (
-            <DataImportAutonomous onUpload={(d) => { setUploadPayload(d); setStep("preview"); }} onBack={() => setStep("details")} />
+            <DataImportAutonomous onUpload={(d: any) => { setUploadPayload(d); setStep("preview"); }} onBack={() => setStep("details")} />
           )}
         </>
       )}

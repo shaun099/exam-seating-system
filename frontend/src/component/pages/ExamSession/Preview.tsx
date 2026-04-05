@@ -112,18 +112,25 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
   }
 
   const parseInternal = (rawRows: any[][], item: any) => {
+    const startRow = Number.isFinite(Number(item?.startRow)) ? Number(item.startRow) : 0
+    const endRow = Number.isFinite(Number(item?.endRow)) ? Number(item.endRow) : rawRows.length
+    const scopedRows = rawRows.slice(startRow, endRow)
+
     let nameIdx = -1
-    for (let r = 0; r < Math.min(10, rawRows.length); r++) {
-      const row = rawRows[r].map(c => String(c ?? "").toLowerCase())
+    for (let r = 0; r < Math.min(10, scopedRows.length); r++) {
+      const row = scopedRows[r].map(c => String(c ?? "").toLowerCase())
       nameIdx = row.findIndex(h => ["name", "student"].some(k => h.includes(k)))
       if (nameIdx !== -1) break
     }
 
     let currentBatch = item.dept || "N/A"
     let currentSem = item.semester || "N/A"
+    const subjectName = item.subjectName || item.tags?.subject_name || item.tags?.course_name || item.tags?.subject || "N/A"
+    const subjectCode = item.subjectCode || item.tags?.subject_code || item.tags?.course_code || item.tags?.code || ""
+    const courseLabel = subjectCode ? `${subjectName} (${subjectCode})` : subjectName
     const results: string[][] = []
 
-    rawRows.forEach(row => {
+    scopedRows.forEach(row => {
       const rowStr = row.join(" ").trim()
       const headingMatch = rowStr.match(/Batch\s*:\s*([A-Z\s&]+).*\(S([1-8])\)/i)
       if (headingMatch) {
@@ -132,27 +139,58 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
       }
       const name = String(row[nameIdx] ?? "").trim()
       if (name && isNaN(Number(name)) && !name.toLowerCase().includes("name")) {
-        results.push([currentBatch, currentSem, name, item.subjectName || "Internal Exam"])
+        results.push([currentBatch, currentSem, name, courseLabel])
       }
     })
     return results
   }
 
   const parseAutonomous = (rawRows: any[][], item: any) => {
-    let regIdx = -1, nameIdx = -1
-    for (let r = 0; r < Math.min(10, rawRows.length); r++) {
-      const row = rawRows[r].map(c => String(c ?? "").toLowerCase())
-      regIdx = row.findIndex(h => ["register", "reg", "roll"].some(k => h.includes(k)))
-      nameIdx = row.findIndex(h => ["name", "student"].some(k => h.includes(k)))
-      if (regIdx !== -1 && nameIdx !== -1) break
+    const startRow = Number.isFinite(Number(item?.startRow)) ? Number(item.startRow) : 0
+    const endRow = Number.isFinite(Number(item?.endRow)) ? Number(item.endRow) : rawRows.length
+    const scopedRows = rawRows.slice(startRow, endRow)
+
+    let headerRowIdx = 0
+    let regIdx = -1
+    let nameIdx = -1
+
+    for (let r = 0; r < Math.min(12, scopedRows.length); r++) {
+      const row = scopedRows[r].map(c => String(c ?? "").toLowerCase())
+
+      const universityRegIdx = row.findIndex(h =>
+        h.includes("university") &&
+        (h.includes("registration") || h.includes("register")) &&
+        (h.includes("no") || h.includes("number"))
+      )
+      const fallbackRegIdx = row.findIndex(h => ["register", "registration", "reg no", "regno", "roll"].some(k => h.includes(k)))
+      const detectedNameIdx = row.findIndex(h => ["name", "student"].some(k => h.includes(k)))
+
+      if ((universityRegIdx !== -1 || fallbackRegIdx !== -1) && detectedNameIdx !== -1) {
+        headerRowIdx = r
+        regIdx = universityRegIdx !== -1 ? universityRegIdx : fallbackRegIdx
+        nameIdx = detectedNameIdx
+        break
+      }
     }
 
-    return rawRows.slice(1).map(row => [
-      String(row[regIdx] ?? "").trim(),
-      String(row[nameIdx] ?? "").trim(),
-      item.dept || "N/A",
-      item.semester || "N/A",
-      item.subjectCode || "N/A"
+    if (regIdx === -1 && scopedRows.length > 0) {
+      const header = scopedRows[0].map(c => String(c ?? "").toLowerCase())
+      regIdx = header.findIndex(h => ["register", "registration", "reg", "roll"].some(k => h.includes(k)))
+      nameIdx = header.findIndex(h => ["name", "student"].some(k => h.includes(k)))
+    }
+
+    const branch = item.tags?.branch || item.tags?.department || item.dept || "N/A"
+    const semester = item.semester || item.tags?.semester || "N/A"
+    const subjectName = item.subjectName || item.tags?.subject_name || "N/A"
+    const subjectCode = item.subjectCode || item.tags?.subject_code || item.tags?.course_code || ""
+    const courseLabel = subjectCode ? `${subjectName} (${subjectCode})` : subjectName
+
+    return scopedRows.slice(headerRowIdx + 1).map(row => [
+      regIdx !== -1 ? String(row[regIdx] ?? "").trim() : "N/A",
+      nameIdx !== -1 ? String(row[nameIdx] ?? "").trim() : "",
+      branch,
+      semester,
+      courseLabel
     ]).filter(r => r[1] !== "")
   }
 

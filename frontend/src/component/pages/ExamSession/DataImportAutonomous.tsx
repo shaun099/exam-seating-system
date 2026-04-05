@@ -1,711 +1,672 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
-import { Upload, FileSpreadsheet, ArrowLeft, ArrowRight, Trash2, AlertCircle, Settings, Plus, X } from "lucide-react"
+import {
+  Upload, FileSpreadsheet, ArrowLeft, ArrowRight,
+  Trash2, Settings, Plus, ChevronDown, Loader2, AlertCircle,
+} from "lucide-react"
 import { Input } from "../../ui/input"
+import * as XLSX from "xlsx"
 
-// --- INITIAL DATA ---
-const INITIAL_DEPARTMENTS: string[] = [
-  "Computer Science and Engineering",
-  "Artificial Intelligence and Data Science",
-  "Civil Engineering",
-  "Cyber Security",
-  "Computer Science with Artificial Intelligence",
-  "Electronics and Communications Engineering",
-  "Electronics and Computer Engineering",
-  "Electrical and Electronics Engineering",
-  "Mechanical Engineering"
-];
+// ------------------------------------------------------------------ //
+//  Constants & helpers                                               //
+// ------------------------------------------------------------------ //
 
-const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map((semester) => `S${semester}`)
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
+const DEPT_PATTERNS = [
+  { pattern: /\bCSE\b|computer science/i,           dept: "Computer Science and Engineering" },
+  { pattern: /\bAD\b|artificial intelligence/i,     dept: "Artificial Intelligence and Data Science" },
+  { pattern: /\bCivil\b|\bCE\b/i,                   dept: "Civil Engineering" },
+  { pattern: /\bCC\b|cyber security/i,               dept: "Cyber Security" },
+  { pattern: /\bCA\b|computer science.*artificial/i, dept: "Computer Science with Artificial Intelligence" },
+  { pattern: /\bECE\b|electronics.*communications/i, dept: "Electronics and Communications Engineering" },
+  { pattern: /\bER\b|electronics.*computer/i,         dept: "Electronics and Computer Engineering" },
+  { pattern: /\bEEE\b|electrical/i,                   dept: "Electrical and Electronics Engineering" },
+  { pattern: /\bME\b|mechanical/i,                   dept: "Mechanical Engineering" },
+]
 
-const INITIAL_SYLLABUS: Record<string, Record<string, { name: string; code: string }[]>> = {
-  "S1": {
-    "All": [
-      { name: "Linear Algebra", code: "MAT 101" },
-      { name: "Engineering Physics A", code: "PHT 100" },
-      { name: "Engineering Physics B", code: "PHT 110" },
-      { name: "Engineering Graphics", code: "EST 110" },
-      { name: "Life Skills", code: "HUN 101" },
-      { name: "Engineering Chemistry", code: "CYT 100" },
-      { name: "Engineering Mechanics", code: "EST 100" },
-      { name: "Basics of Civil and Mechanical Engineering", code: "EST 120" },
-      { name: "Basics of Electrical and Electronic Engineering", code: "EST 130" }
-    ]
-  },
-  "S2": {
-    "All": [
-      { name: "Vector Calculus, Differential Equation", code: "MAT 102" },
-      { name: "Professional Communication", code: "HUN 102" },
-      { name: "Programming in C", code: "EST 102" },
-      { name: "Engineering Physics A", code: "PHT 100" },
-      { name: "Engineering Physics B", code: "PHT 110" },
-      { name: "Engineering Graphics", code: "EST 110" },
-      { name: "Engineering Chemistry", code: "CYT 100" },
-      { name: "Engineering Mechanics", code: "EST 100" }
-    ]
-  },
-  "S3": {
-    "Computer Science and Engineering": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Civil Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Mechanics of Solids", "code": "CET 201" },
-      { "name": "Fluid Mechanics and Hydraulics", "code": "CET 203" },
-      { "name": "Surveying and Geomatics", "code": "CET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Cyber Security": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Circuits and Networks", "code": "EET 201" },
-      { "name": "Measurements and Instrumentation", "code": "EET 203" },
-      { "name": "Analog Electronics", "code": "EET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Solid State Devices", "code": "ECT 201" },
-      { "name": "Logic Circuit Design", "code": "ECT 203" },
-      { "name": "Network Theory", "code": "ECT 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Mechanics of Solids", "code": "MET 201" },
-      { "name": "Mechanics of Fluids", "code": "MET 203" },
-      { "name": "Metallurgy & Material Science", "code": "MET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Solid State Devices", "code": "ECT 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ]
-  },
-  "S4": {
-   "Computer Science and Engineering": [
-      { "name": "Graph Theory", "code": "MAT 206" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Database Management Systems", "code": "CST 204" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to Artificial Intelligence", "code": "ADT 202" },
-      { "name": "Data Storage and Management", "code": "ADT 204" },
-      { "name": "Machine Learning", "code": "ADT 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Civil Engineering": [
-      { "name": "Vector Calculus, Differential Equations and Transforms", "code": "MAT 202" },
-      { "name": "Engineering Geology", "code": "CET 202" },
-      { "name": "Structural Analysis I", "code": "CET 204" },
-      { "name": "Transportation Engineering", "code": "CET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Cyber Security": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to Cyber Security", "code": "CZT 202" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to AI", "code": "AIT 202" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Probability, Distributions and Numerical Methods", "code": "MAT 204" },
-      { "name": "Analog Circuits", "code": "ECT 202" },
-      { "name": "Signals and Systems", "code": "ECT 204" },
-      { "name": "Computer Organization", "code": "ECT 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Analog Circuits", "code": "ECT 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Signals and Systems", "code": "ECT 204" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Probability, Distributions and Numerical Methods", "code": "MAT 204" },
-      { "name": "DC Machines and Transformers", "code": "EET 202" },
-      { "name": "Digital Electronics", "code": "EET 204" },
-      { "name": "Power System I", "code": "EET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Vector Calculus, Differential Equations and Transforms", "code": "MAT 202" },
-      { "name": "Engineering Thermodynamics", "code": "MET 202" },
-      { "name": "Manufacturing Process", "code": "MET 204" },
-      { "name": "Machine Tools and Metrology", "code": "MET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ]
-  },
-  "S5": {
-  "Computer Science and Engineering": [
-      { "name": "Formal Languages and Automata Theory", "code": "CST 301" },
-      { "name": "Computer Networks", "code": "CST 303" },
-      { "name": "System Software", "code": "CST 305" },
-      { "name": "Microprocessors and Microcontrollers", "code": "CST 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Civil Engineering": [
-      { "name": "Structural Analysis II", "code": "CET 301" },
-      { "name": "Design of Concrete Structures I", "code": "CET 303" },
-      { "name": "Geotechnical Engineering I", "code": "CET 305" },
-      { "name": "Hydrology & Water Resources Engineering", "code": "CET 307" },
-      { "name": "Management for Engineers", "code": "CET 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Linear Integrated Circuits", "code": "ECT 301" },
-      { "name": "Digital Communication", "code": "ECT 303" },
-      { "name": "Electromagnetic Waves", "code": "ECT 305" },
-      { "name": "Control Systems", "code": "ECT 307" },
-      { "name": "Management for Engineers", "code": "HUT 310" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Power System II", "code": "EET 301" },
-      { "name": "Microprocessors and Microcontrollers", "code": "EET 303" },
-      { "name": "Signals and Systems", "code": "EET 305" },
-      { "name": "Synchronous and Induction Machines", "code": "EET 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Mechanics of Machinery", "code": "MET 301" },
-      { "name": "Thermal Engineering I", "code": "MET 303" },
-      { "name": "Industrial Engineering", "code": "MET 305" },
-      { "name": "Design of Machine Elements I", "code": "MET 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Foundations of Machine Learning", "code": "ADT 301" },
-      { "name": "Database Management Systems", "code": "ADT 303" },
-      { "name": "Operating Systems", "code": "ADT 305" },
-      { "name": "Programming with Python", "code": "ADT 307" },
-      { "name": "Principles of Management", "code": "ADT 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Cyber Security": [
-      { "name": "Cryptography", "code": "CZT 301" },
-      { "name": "Network Security", "code": "CZT 303" },
-      { "name": "Secure Coding", "code": "CZT 305" },
-      { "name": "Digital Forensics", "code": "CZT 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Machine Learning", "code": "AIT 301" },
-      { "name": "Artificial Intelligence", "code": "AIT 303" },
-      { "name": "Data Analytics", "code": "AIT 305" },
-      { "name": "Neural Networks", "code": "AIT 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Database Management Systems", "code": "CST 204" },
-      { "name": "Digital Communication", "code": "ECT 303" },
-      { "name": "Electromagnetic Waves", "code": "ECT 305" },
-      { "name": "Microprocessors and Microcontrollers", "code": "CST 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ]
-  }
-};
+const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => `S${s}`)
+const ALLOWED_EXTENSIONS = [".xlsx", ".xls", ".csv"]
+const ALLOWED_MIME = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+]
+const API_BASE_URL = import.meta.env.VITE_API_URL
 
-interface AutoFileEntry {
-  id: string
-  file: File
-  batch: string
-  semester: string
-  dept: string
-  subjectName: string
-  subjectCode: string
+const getDeptFromText = (text: string, fallback = "") =>
+  DEPT_PATTERNS.find((p) => p.pattern.test(text))?.dept ?? fallback
+
+const parseBatchLine = (
+  text: string,
+  defaults: { dept: string; semester: string; division: string }
+) => {
+  const semesterMatch = text.match(/\bS([1-8])\b/i)
+  const semester = semesterMatch ? `S${semesterMatch[1]}` : defaults.semester
+
+  const divisionMatch =
+    text.match(/\b(?:division|div)\s*[:.-]?\s*([A-Z]\d?)\b/i) ||
+    text.match(/\b\d{4}-\d{4}\s+([A-Z]\d?)\s*\(\s*S[1-8]\s*\)/i) ||
+    text.match(/\b\d{4}-\d{4}\s+([A-Z]\d?)\b/i)
+  const division = divisionMatch ? divisionMatch[1].toUpperCase() : defaults.division
+
+  const dept = getDeptFromText(text, defaults.dept)
+
+  const subjectMatch =
+    text.match(/\b(?:subject|course)\s*[:.-]?\s*([^()|]+?)\s*(?:\(([^()]+)\))?(?=\s*(?:$|[,;|/]))/i) ||
+    text.match(/\b(?:subject|course)\s*[:.-]?\s*([^()]+?)\s*$/i)
+
+  const subjectName = subjectMatch ? subjectMatch[1].trim() : ""
+  const subjectCode = subjectMatch?.[2] ? subjectMatch[2].trim().toUpperCase() : ""
+
+  return { dept, semester, division, subjectName, subjectCode }
 }
 
-export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: any) => void; onBack: () => void }) {
-  const [isDragging, setIsDragging] = useState<boolean>(false)
-  const [fileEntries, setFileEntries] = useState<AutoFileEntry[]>([])
-  
-  // --- DYNAMIC DATA MANAGEMENT ---
-  const [departments, setDepartments] = useState<string[]>(INITIAL_DEPARTMENTS)
-  const [syllabus, setSyllabus] = useState(INITIAL_SYLLABUS)
-  const [isLoading, setIsLoading] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+const isLikelyDataRow = (row: any[]): boolean => {
+  const text = (row ?? []).map((cell) => String(cell ?? "").trim()).join(" ").trim()
+  if (!text) return false
+
+  return !/\b(reg\s*no|reg\.?\s*no|registration|roll\s*no|name|branch|course|subject|semester|batch|division|s\.?\s*no|sl\.?\s*no)\b/i.test(text)
+}
+
+const isValidFile = (file: File) => {
+  const ext = "." + file.name.split(".").pop()?.toLowerCase()
+  return ALLOWED_EXTENSIONS.includes(ext) || ALLOWED_MIME.includes(file.type)
+}
+
+// ------------------------------------------------------------------ //
+//  Types                                                             //
+// ------------------------------------------------------------------ //
+
+interface Subject {
+  course_name: string
+  course_code: string
+}
+
+interface Syllabus {
+  [semester: string]: {
+    [department: string]: Subject[]
+  }
+}
+
+interface FileEntry {
+  id: string
+  file: File
+  dept: string
+  semester: string
+  division: string
+  batch: string
+  subjectName: string
+  subjectCode: string
+  studentCount: number
+  startRow: number
+  endRow: number
+}
+
+type AddFormState = Record<string, { name: string; code: string }>
+
+// ------------------------------------------------------------------ //
+//  Component                                                         //
+// ------------------------------------------------------------------ //
+
+export function DataImportAutonomous({
+  onUpload,
+  onBack,
+}: {
+  onUpload: (data: any) => void
+  onBack: () => void
+}) {
+  const [fileEntries, setFileEntries] = useState<FileEntry[]>([])
   const [isManaging, setIsManaging] = useState(false)
-  
-  // Management Temp States
-  const [newDeptName, setNewDeptName] = useState("")
-  const [mgmtSem, setMgmtSem] = useState("S3")
-  const [mgmtDept, setMgmtDept] = useState(INITIAL_DEPARTMENTS[0])
-  const [newSubName, setNewSubName] = useState("")
-  const [newSubCode, setNewSubCode] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [syllabus, setSyllabus] = useState<Syllabus>({})
+  const [departments, setDepartments] = useState<string[]>([])
+  const [expandedSem, setExpandedSem] = useState<string | null>(null)
+  const [addForms, setAddForms] = useState<AddFormState>({})
+
+  const fetchJson = useCallback(async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`)
+    }
+    return response.json()
+  }, [])
+
+  // ---------------------------------------------------------------- //
+  //  Backend fetch (Hardcoded to Autonomous)                         //
+  // ---------------------------------------------------------------- //
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
     setFetchError(null)
     try {
-      const [subjectsRes, departmentsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/exams/subjects?batch=Autonomous`),
-        fetch(`${API_BASE}/api/v1/exams/departments?batch=Autonomous`),
-      ])
+      let [data, departmentsData] = await Promise.all([
+        fetchJson(`${API_BASE_URL}/api/v1/exams/subjects?batch=Autonomous`),
+        fetchJson(`${API_BASE_URL}/api/v1/exams/departments?batch=Autonomous`).catch(() => []),
+      ]) as [any[], any[]]
 
-      if (!subjectsRes.ok) {
-        throw new Error(`Could not load subjects (${subjectsRes.status})`)
+      // Some deployments have no autonomous seed rows; fall back so dropdowns remain usable.
+      if ((data?.length ?? 0) === 0) {
+        [data, departmentsData] = await Promise.all([
+          fetchJson(`${API_BASE_URL}/api/v1/exams/subjects`).catch(() => []),
+          fetchJson(`${API_BASE_URL}/api/v1/exams/departments`).catch(() => []),
+        ]) as [any[], any[]]
       }
 
-      const subjectsData: Array<{
-        semester: string
-        department: string
-        course_name: string
-        course_code: string
-      }> = await subjectsRes.json()
-      const departmentsData: Array<{ name: string }> = departmentsRes.ok ? await departmentsRes.json() : []
+      if ((data?.length ?? 0) === 0) {
+        [data, departmentsData] = await Promise.all([
+          fetchJson(`${API_BASE_URL}/api/v1/exams/subjects?batch=KTU`).catch(() => []),
+          fetchJson(`${API_BASE_URL}/api/v1/exams/departments?batch=KTU`).catch(() => []),
+        ]) as [any[], any[]]
+      }
 
-      const grouped = subjectsData.reduce<Record<string, Record<string, { name: string; code: string }[]>>>(
-        (acc, item) => {
-          const semester = (item.semester || "").trim().toUpperCase()
-          const department = (item.department || "").trim()
-          if (!semester || !department) return acc
-          if (!acc[semester]) acc[semester] = {}
-          if (!acc[semester][department]) acc[semester][department] = []
-          acc[semester][department].push({
-            name: item.course_name,
-            code: item.course_code,
-          })
-          return acc
-        },
-        {}
-      )
-
-      const deptNames = Array.from(
+      const uniqueDepts = Array.from(
         new Set([
-          ...departmentsData.map((d) => (d.name || "").trim()),
-          ...subjectsData.map((s) => (s.department || "").trim()),
+          ...departmentsData.map((d) => (d.name ?? "").trim()),
+          ...data.map((s) => (s.department ?? "").trim()),
         ].filter(Boolean))
-      )
+      ) as string[]
+      setDepartments(uniqueDepts)
 
-      setSyllabus(Object.keys(grouped).length ? grouped : INITIAL_SYLLABUS)
-      setDepartments(deptNames.length ? deptNames : INITIAL_DEPARTMENTS)
-      if (!deptNames.includes(mgmtDept)) {
-        setMgmtDept(deptNames[0] || INITIAL_DEPARTMENTS[0])
-      }
-    } catch (error: any) {
-      setFetchError(error?.message || "Could not load subjects/departments")
+      const grouped = data.reduce<Syllabus>((acc, sub) => {
+        const sem = (sub.semester ?? "").trim()
+        const dept = (sub.department ?? "").trim()
+        if (!sem || !dept) return acc
+        if (!acc[sem]) acc[sem] = {}
+        if (!acc[sem][dept]) acc[sem][dept] = []
+        acc[sem][dept].push({ course_name: sub.course_name, course_code: sub.course_code })
+        return acc
+      }, {})
+
+      setSyllabus(grouped)
+    } catch (e: any) {
+      setFetchError(e.message ?? "Could not connect to server")
     } finally {
       setIsLoading(false)
     }
-  }, [mgmtDept])
+  }, [fetchJson])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  useEffect(() => { loadData() }, [loadData])
 
-  const processFiles = (files: File[]) => {
-    const newEntries: AutoFileEntry[] = files.map(f => ({
-      id: Math.random().toString(36).substring(7),
-      file: f,
-      batch: "",
-      semester: "",
-      dept: "",
-      subjectName: "",
-      subjectCode: ""
-    }))
-    setFileEntries(prev => [...prev, ...newEntries])
+  const getSubjectsFor = (semester: string, dept: string): Subject[] => {
+    const semData = syllabus[semester] ?? {}
+    if (semData[dept]) return semData[dept]
+    const matchedKey = Object.keys(semData).find(
+      (key) => key.trim().toLowerCase() === dept.trim().toLowerCase()
+    )
+    return matchedKey ? semData[matchedKey] : []
   }
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); 
-    setIsDragging(false);
-    const dropped = Array.from(e.dataTransfer.files).filter(f => /\.(csv|xlsx|xls)$/i.test(f.name))
-    processFiles(dropped)
-  }, [])
+  // ---------------------------------------------------------------- //
+  //  Syllabus management actions                                       //
+  // ---------------------------------------------------------------- //
 
-  const updateTag = (id: string, field: keyof AutoFileEntry, value: string) => {
-    setFileEntries(prev => prev.map(entry => {
-      if (entry.id !== id) return entry;
-      const updated = { ...entry, [field]: value };
+  const handleAdd = async (sem: string, dept: string) => {
+    const key = `${sem}__${dept}`
+    const form = addForms[key] ?? { name: "", code: "" }
+    if (!form.name.trim() || !form.code.trim()) return
 
-      if (field === "batch" || field === "semester" || field === "dept") {
-        updated.subjectName = "";
-        updated.subjectCode = "";
-        return updated;
-      }
-      
-      if (field === "subjectName") {
-        const semesterData = syllabus[updated.semester];
-        const deptData = semesterData?.[updated.dept] || semesterData?.["All"];
-        const subject = deptData?.find(s => s.name === value);
-        updated.subjectCode = subject ? subject.code : "";
-      }
-      return updated;
-    }))
-  }
-
-  const removeFile = (id: string) => setFileEntries(prev => prev.filter(e => e.id !== id))
-
-  const getSubjects = (semester: string, dept: string) => {
-    if (!semester) return [];
-    const semesterData = syllabus[semester];
-    if (!semesterData) return [];
-    if (["S1", "S2"].includes(semester)) return semesterData["All"] || [];
-    return semesterData[dept] || [];
-  };
-
-  // --- MANAGEMENT LOGIC ---
-  const addDept = async () => {
-    const name = newDeptName.trim()
-    if (!name) return
-
-    const res = await fetch(`${API_BASE}/api/v1/exams/departments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, batch: "Autonomous" }),
-    })
-
-    if (!res.ok && res.status !== 409) {
-      alert("Could not create department")
-      return
-    }
-
-    setNewDeptName("")
-    await loadData()
-  }
-
-  const deleteDept = async (name: string) => {
-    if (!window.confirm(`Delete branch \"${name}\" and related subjects?`)) return
-
-    const res = await fetch(`${API_BASE}/api/v1/exams/departments/${encodeURIComponent(name)}?batch=Autonomous`, {
-      method: "DELETE",
-    })
-    if (!res.ok) {
-      alert("Could not delete department")
-      return
-    }
-
-    setFileEntries((prev) => prev.map((entry) => entry.dept === name ? { ...entry, dept: "", subjectName: "", subjectCode: "" } : entry))
-    await loadData()
-  }
-
-  const addSubject = async () => {
-    const courseName = newSubName.trim()
-    const courseCode = newSubCode.trim().toUpperCase()
-    if (!courseName || !courseCode || !mgmtDept) return
-
-    const res = await fetch(`${API_BASE}/api/v1/exams/subjects`, {
+    await fetch(`${API_BASE_URL}/api/v1/exams/subjects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        semester: mgmtSem,
-        department: mgmtDept,
+        semester: sem,
+        department: dept,
         batch: "Autonomous",
-        course_name: courseName,
-        course_code: courseCode,
+        course_name: form.name.trim(),
+        course_code: form.code.trim().toUpperCase(),
       }),
     })
 
-    if (!res.ok && res.status !== 409) {
-      alert("Could not add subject")
-      return
-    }
-
-    setNewSubName("")
-    setNewSubCode("")
-    await loadData()
+    setAddForms((prev) => ({ ...prev, [key]: { name: "", code: "" } }))
+    loadData()
   }
 
-  const deleteSubject = async (courseCode: string) => {
-    const res = await fetch(`${API_BASE}/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=Autonomous`, {
-      method: "DELETE",
-    })
-    if (!res.ok) {
-      alert("Could not delete subject")
+  const handleDelete = async (courseCode: string, courseName: string) => {
+    if (!window.confirm(`Delete "${courseName}" (${courseCode})?`)) return
+
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=Autonomous`,
+      { method: "DELETE" }
+    )
+    if (!res.ok && res.status === 404) {
+      alert(`Subject "${courseCode}" was not found on the server.`)
       return
     }
-    await loadData()
+    loadData()
   }
 
-  const handleContinue = () => {
-    onUpload({
-      type: "autonomous",
-      data: fileEntries
-    })
+  // ---------------------------------------------------------------- //
+  //  File processing                                                 //
+  // ---------------------------------------------------------------- //
+
+  const processFiles = async (files: File[]) => {
+    const validFiles = files.filter(isValidFile)
+    const rejected = files.length - validFiles.length
+    if (rejected > 0) {
+      alert(`${rejected} file(s) skipped — only .csv, .xlsx and .xls files are accepted.`)
+    }
+    if (validFiles.length === 0) return
+
+    const newEntries: FileEntry[] = []
+
+    for (const f of validFiles) {
+      const alreadyAdded = fileEntries.some(
+        (e) => e.file.name === f.name && e.file.size === f.size
+      )
+      if (alreadyAdded) continue
+
+      const rows: any[][] = await new Promise((res) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const wb = XLSX.read(e.target?.result, { type: "array" })
+          res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }))
+        }
+        reader.readAsArrayBuffer(f)
+      })
+
+      const headerText = rows
+        .slice(0, 80)
+        .map((row) => (row ?? []).join(" "))
+        .join(" ")
+
+      const globalDept = getDeptFromText(headerText, "")
+      const globalSemMatch = headerText.match(/\bS([1-8])\b/i)
+      const globalSemester = globalSemMatch ? `S${globalSemMatch[1]}` : ""
+
+      const blocks: { start: number; dept: string; sem: string; div: string }[] = []
+      rows.forEach((row, idx) => {
+        const txt = (row ?? []).join(" ")
+        if (/batch\s*:/i.test(txt)) {
+          const parsed = parseBatchLine(txt, {
+            dept: globalDept,
+            semester: globalSemester,
+            division: "NA",
+          })
+          blocks.push({ start: idx, dept: parsed.dept, sem: parsed.semester, div: parsed.division })
+        }
+      })
+
+      const perFileEntries: FileEntry[] = []
+
+      if (blocks.length === 0) {
+        const parsed = parseBatchLine(headerText, {
+          dept: globalDept,
+          semester: globalSemester,
+          division: "NA",
+        })
+        perFileEntries.push({
+          id: Math.random().toString(36).substr(2, 9),
+          file: f,
+          dept: parsed.dept,
+          semester: parsed.semester,
+          division: parsed.division,
+          batch: "Autonomous",
+          subjectName: parsed.subjectName,
+          subjectCode: parsed.subjectCode,
+          studentCount: rows.filter(isLikelyDataRow).length,
+          startRow: 0,
+          endRow: rows.length,
+        })
+      } else {
+        blocks.forEach((meta, i) => {
+          const end = blocks[i + 1]?.start ?? rows.length
+          const count = rows
+            .slice(meta.start + 1, end)
+            .filter(isLikelyDataRow)
+            .length
+          const headerRowText = (rows[meta.start] ?? []).join(" ")
+          const parsed = parseBatchLine(headerRowText, {
+            dept: meta.dept,
+            semester: meta.sem,
+            division: meta.div,
+          })
+          perFileEntries.push({
+            id: Math.random().toString(36).substr(2, 9),
+            file: f,
+            dept: parsed.dept,
+            semester: parsed.semester,
+            division: parsed.division,
+            batch: "Autonomous",
+            subjectName: parsed.subjectName,
+            subjectCode: parsed.subjectCode,
+            studentCount: count,
+            startRow: meta.start,
+            endRow: end,
+          })
+        })
+      }
+
+      newEntries.push(...perFileEntries)
+    }
+
+    const detectedDepts = newEntries.map((e) => e.dept).filter(Boolean)
+    if (detectedDepts.length) {
+      setDepartments((prev) => Array.from(new Set([...prev, ...detectedDepts])))
+    }
+
+    setFileEntries((prev) => [...prev, ...newEntries])
+  }
+
+  const updateTag = (id: string, field: string, value: string) => {
+    setFileEntries((prev) =>
+      prev.map((e) => {
+        if (e.id !== id) return e
+        const updated = { ...e, [field]: value }
+        if (field === "subjectName") {
+          const sub = getSubjectsFor(updated.semester, updated.dept).find(
+            (s) => s.course_name === value
+          )
+          updated.subjectCode = sub ? sub.course_code : ""
+        }
+        return updated
+      })
+    )
+  }
+
+  const getMissingField = (entry: FileEntry): string | null => {
+    if (!entry.semester) return "Semester"
+    if (!entry.dept) return "Branch"
+    if (!entry.subjectCode) return "Subject"
+    return null
+  }
+
+  const allValid = fileEntries.length > 0 && fileEntries.every((e) => !getMissingField(e))
+
+  if (isLoading) {
+    return (
+      <div className="p-20 text-center">
+        <Loader2 className="animate-spin mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Loading subjects…</p>
+      </div>
+    )
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto shadow-lg">
-      <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between">
+    <Card className="w-full max-w-4xl mx-auto shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
         <div>
-          <CardTitle className="text-xl">Autonomous University Upload</CardTitle>
-          <p className="text-sm text-muted-foreground">Upload and tag departmental course details</p>
+          <CardTitle className="text-xl font-bold">Autonomous Import</CardTitle>
+          <p className="text-sm text-muted-foreground">Autonomous examination data uploading platform</p>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsManaging(!isManaging)}>
-          <Settings className={`w-5 h-5 ${isManaging ? "text-primary" : "text-muted-foreground"}`} />
+          <Settings className={`w-5 h-5 ${isManaging ? "text-primary" : ""}`} />
         </Button>
       </CardHeader>
 
       <CardContent className="space-y-6 pt-6">
         {fetchError && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
-            {fetchError}
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>Could not load subjects: {fetchError}</span>
+            <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={loadData}>
+              Retry
+            </Button>
           </div>
         )}
 
-        {isLoading && (
-          <div className="text-sm text-muted-foreground">Loading subjects and departments...</div>
-        )}
-
-        {isManaging ? (
-          <div className="space-y-6 border p-4 rounded-lg bg-slate-50/50">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm border-b pb-2 uppercase tracking-widest text-slate-500">Manage Branches</h3>
-              <div className="flex gap-2">
-                <Input placeholder="New Branch Name" value={newDeptName} onChange={e => setNewDeptName(e.target.value)} />
-                <Button size="sm" onClick={addDept}><Plus className="w-4 h-4" /></Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {departments.map(d => (
-                  <span key={d} className="flex items-center gap-1 bg-white border px-2 py-1 rounded text-xs font-bold">
-                    {d} <X className="w-3 h-3 cursor-pointer text-destructive" onClick={() => deleteDept(d)} />
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm border-b pb-2 uppercase tracking-widest text-slate-500">Manage Courses</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-blue-600 outline-none" value={mgmtSem} onChange={e => setMgmtSem(e.target.value)}>
-                  {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-blue-600 outline-none" value={mgmtDept} onChange={e => setMgmtDept(e.target.value)}>
-                  {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <Input placeholder="Subject Name" value={newSubName} onChange={e => setNewSubName(e.target.value)} />
-                <Input placeholder="Code" value={newSubCode} onChange={e => setNewSubCode(e.target.value)} className="w-24" />
-                <Button size="sm" onClick={addSubject}><Plus className="w-4 h-4" /></Button>
-              </div>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {(syllabus[mgmtSem]?.[mgmtDept] || []).map((s, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs bg-white p-2 border rounded">
-                    <span className="font-bold">{s.name} ({s.code})</span>
-                    <Trash2 className="w-3 h-3 text-destructive cursor-pointer" onClick={() => deleteSubject(s.code)} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
+        {!isManaging ? (
           <>
-            {/* DROPZONE */}
             <div
-              onDrop={handleDrop}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-              onDragLeave={() => setIsDragging(false)}
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${
-                isDragging ? "border-primary bg-primary/5 shadow-inner" : "border-border hover:border-primary/50"
-              }`}
+              onDrop={(e) => { e.preventDefault(); processFiles(Array.from(e.dataTransfer.files)) }}
+              onDragOver={(e) => e.preventDefault()}
+              className="border-2 border-dashed rounded-xl p-10 text-center hover:bg-slate-50 transition-all cursor-pointer"
             >
-              <div className="space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center shadow-sm">
-                  <Upload className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-bold text-lg">Upload Student Data</p>
-                  <p className="text-sm text-muted-foreground">Drag and drop your files here, or click to browse</p>
-                </div>
-                <input 
-                  type="file" 
-                  multiple 
-                  accept=".csv,.xlsx,.xls" 
-                  className="hidden" 
-                  id="auto-file-input" 
-                  onChange={(e) => processFiles(Array.from(e.target.files || []))} 
-                />
-                <label htmlFor="auto-file-input">
-                  <Button variant="outline" asChild className="cursor-pointer font-bold px-8">
-                    <span>Browse Files</span>
-                  </Button>
-                </label>
-              </div>
+              <Upload className="mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">Drop student lists here</p>
+              <p className="text-xs text-muted-foreground mt-1">.csv, .xlsx and .xls</p>
+              <input
+                type="file"
+                multiple
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                id="f-in"
+                onChange={(e) => processFiles(Array.from(e.target.files ?? []))}
+              />
+              <Button variant="outline" size="sm" className="mt-4" asChild>
+                <label htmlFor="f-in">Browse</label>
+              </Button>
             </div>
 
-            {/* SCROLLABLE ENTRIES */}
-            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+            <div className="space-y-3">
               {fileEntries.map((entry) => {
-                const subjects = getSubjects(entry.semester, entry.dept);
+                const missingField = getMissingField(entry)
                 return (
-                  <div key={entry.id} className="p-5 border rounded-xl bg-white shadow-sm space-y-4 border-slate-100">
-                    <div className="flex items-center justify-between border-b pb-3 border-slate-50">
-                      <div className="flex items-center gap-3 text-blue-600">
-                        <div className="p-2 bg-blue-50 rounded-lg"><FileSpreadsheet className="w-4 h-4" /></div>
-                        <span className="text-sm font-black truncate max-w-md uppercase tracking-tight">{entry.file.name}</span>
+                  <div
+                    key={entry.id}
+                    className={`p-4 border rounded-xl bg-white shadow-sm transition-colors ${
+                      missingField ? "border-amber-300" : "hover:border-blue-200"
+                    }`}
+                  >
+                    <div className="flex justify-between mb-3 items-center">
+                      <div className="flex items-center gap-3">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <span className="text-sm font-bold truncate max-w-[200px]">{entry.file.name}</span>
+                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight uppercase">
+                          {entry.studentCount} Students
+                        </span>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => removeFile(entry.id)} className="hover:bg-red-50 group">
-                        <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setFileEntries((prev) => prev.filter((f) => f.id !== entry.id))}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Batch</label>
-                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-600 outline-none" value={entry.batch} onChange={e => updateTag(entry.id, "batch", e.target.value)}>
-                          <option value="">Select Batch</option>
-                          <option value="autonomous">Autonomous</option>
-                          <option value="ktu">KTU</option>
-                        </select>
-                      </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Semester</label>
-                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-600 outline-none" value={entry.semester} onChange={e => updateTag(entry.id, "semester", e.target.value)} disabled={!entry.batch}>
-                          <option value="">Select Semester</option>
-                          {SEMESTERS.map(s => <option key={s} value={s}>Semester {s.slice(1)}</option>)}
-                        </select>
-                      </div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 ${!entry.semester ? "border-amber-400" : ""}`}
+                        value={entry.semester}
+                        onChange={(e) => updateTag(entry.id, "semester", e.target.value)}
+                      >
+                        <option value="">Sem</option>
+                        {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Department</label>
-                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-600 outline-none" value={entry.dept} onChange={e => updateTag(entry.id, "dept", e.target.value)} disabled={!entry.batch || !entry.semester}>
-                          <option value="">Select Branch</option>
-                          {departments.map((d: string) => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                      </div>
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 ${!entry.dept ? "border-amber-400" : ""}`}
+                        value={entry.dept}
+                        onChange={(e) => updateTag(entry.id, "dept", e.target.value)}
+                      >
+                        <option value="">Branch</option>
+                        {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
 
-                      <div className="space-y-1.5 md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Subject Title</label>
-                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-600 outline-none" value={entry.subjectName} onChange={e => updateTag(entry.id, "subjectName", e.target.value)} disabled={!entry.batch || !entry.semester || !entry.dept || !subjects.length}>
-                          <option value="">Select Subject</option>
-                          {subjects.map((s, idx) => <option key={idx} value={s.name}>{s.name}</option>)}
-                        </select>
-                      </div>
+                      <select
+                        className="h-9 border rounded-md text-[11px] px-2"
+                        value={entry.division}
+                        onChange={(e) => updateTag(entry.id, "division", e.target.value)}
+                      >
+                        <option value="NA">NA</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                      </select>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Course Code</label>
-                        <Input placeholder="Code" value={entry.subjectCode} readOnly className="bg-slate-50 border-slate-200 font-black text-blue-700 text-xs h-10" />
-                      </div>
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 font-medium ${!entry.subjectCode ? "border-amber-400" : ""}`}
+                        value={entry.subjectName}
+                        onChange={(e) => updateTag(entry.id, "subjectName", e.target.value)}
+                        disabled={!entry.semester || !entry.dept}
+                      >
+                        <option value="">
+                          {!entry.semester || !entry.dept
+                            ? "Select sem & branch first"
+                            : getSubjectsFor(entry.semester, entry.dept).length === 0
+                            ? "No subjects found"
+                            : "Subject"}
+                        </option>
+                        {getSubjectsFor(entry.semester, entry.dept).map((s) => (
+                          <option key={s.course_code} value={s.course_name}>
+                            {s.course_name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <Input
+                        value={entry.subjectCode}
+                        readOnly
+                        placeholder="Code"
+                        className="h-9 text-[11px] bg-slate-50 font-bold"
+                      />
                     </div>
+
+                    {missingField && (
+                      <p className="mt-2 text-[10px] text-amber-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Please select a {missingField}
+                      </p>
+                    )}
                   </div>
-                );
+                )
               })}
-              {fileEntries.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 opacity-30">
-                   <AlertCircle className="w-10 h-10 mb-2" />
-                   <p className="font-black uppercase tracking-[0.2em] text-xs">No entries generated</p>
-                </div>
-              )}
             </div>
           </>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm font-bold px-1">Manage Syllabus (Autonomous)</p>
+            {SEMESTERS.map((sem) => (
+              <div key={sem} className="border rounded-lg overflow-hidden">
+                <div
+                  className="bg-slate-50 p-3 flex justify-between cursor-pointer hover:bg-slate-100"
+                  onClick={() => setExpandedSem(expandedSem === sem ? null : sem)}
+                >
+                  <span className="text-xs font-bold">{sem} Courses</span>
+                  <ChevronDown className="w-4 h-4" />
+                </div>
+
+                {expandedSem === sem && (
+                  <div className="p-3 space-y-4 bg-white animate-in slide-in-from-top-2">
+                    {[...departments, "All"].map((dept) => {
+                      const key = `${sem}__${dept}`
+                      const form = addForms[key] ?? { name: "", code: "" }
+
+                      return (
+                        <div
+                          key={dept}
+                          className="border-l-4 border-blue-500 pl-4 py-2 bg-slate-50/50 rounded-r-lg"
+                        >
+                          <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">
+                            {dept}
+                          </p>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                            {(syllabus[sem]?.[dept] ?? []).map((s) => (
+                              <div
+                                key={s.course_code}
+                                className="flex items-center justify-between bg-white p-2 rounded-md border shadow-sm text-[10px]"
+                              >
+                                <span className="font-bold">
+                                  {s.course_name}{" "}
+                                  <span className="text-slate-400">({s.course_code})</span>
+                                </span>
+                                <Trash2
+                                  className="w-3 h-3 text-destructive cursor-pointer hover:scale-125 transition-transform"
+                                  onClick={() => handleDelete(s.course_code, s.course_name)}
+                                />
+                              </div>
+                            ))}
+
+                            {(syllabus[sem]?.[dept] ?? []).length === 0 && (
+                              <p className="text-[10px] text-slate-400 col-span-2">No subjects yet</p>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Subject Name"
+                              className="h-8 text-[11px]"
+                              value={form.name}
+                              onChange={(e) =>
+                                setAddForms((prev) => ({
+                                  ...prev,
+                                  [key]: { ...form, name: e.target.value },
+                                }))
+                              }
+                            />
+                            <Input
+                              placeholder="Code"
+                              className="h-8 text-[11px] w-32"
+                              value={form.code}
+                              onChange={(e) =>
+                                setAddForms((prev) => ({
+                                  ...prev,
+                                  [key]: { ...form, code: e.target.value },
+                                }))
+                              }
+                            />
+                            <Button
+                              size="sm"
+                              className="h-8 px-4"
+                              disabled={!form.name.trim() || !form.code.trim()}
+                              onClick={() => handleAdd(sem, dept)}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
-        {/* FOOTER */}
-        <div className="flex justify-between items-center pt-6 border-t">
-          <Button variant="ghost" onClick={onBack} className="font-black uppercase text-[11px] tracking-widest text-slate-500">
+        <div className="flex justify-between pt-6 border-t mt-4">
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="h-10 px-6 font-black uppercase text-[10px] tracking-[0.2em]"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
 
-          <Button 
-            disabled={fileEntries.length === 0 || fileEntries.some(e => !e.subjectCode) || isManaging} 
-            onClick={handleContinue}
-            className="bg-blue-700 hover:bg-blue-800 text-white font-black uppercase text-[11px] tracking-widest px-10 h-12 shadow-xl shadow-blue-100"
-          >
-            Preview Results
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <div className="relative group">
+            <Button
+              disabled={!allValid}
+              onClick={() =>
+                onUpload({
+                  type: "autonomous",
+                  data: fileEntries.map((e) => ({
+                    file: e.file,
+                    batch: "Autonomous",
+                    semester: e.semester,
+                    department: e.dept,
+                    division: e.division,
+                    subjectName: e.subjectName,
+                    subjectCode: e.subjectCode,
+                    tags: {
+                      file_name: e.file.name,
+                      batch: "Autonomous",
+                      semester: e.semester,
+                      department: e.dept,
+                      subject_name: e.subjectName,
+                      course_code: e.subjectCode,
+                      subject_code: e.subjectCode,
+                      division: e.division,
+                      student_count: e.studentCount,
+                      startRow: e.startRow,
+                      endRow: e.endRow,
+                    },
+                  })),
+                })
+              }
+              className="bg-blue-700 hover:bg-blue-800 text-white font-black h-10 px-8 text-[10px] tracking-widest uppercase"
+            >
+              Preview Data <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            {!allValid && fileEntries.length > 0 && (
+              <div className="absolute bottom-full right-0 mb-2 w-52 rounded-md bg-slate-800 px-3 py-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Complete all highlighted fields before continuing
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
