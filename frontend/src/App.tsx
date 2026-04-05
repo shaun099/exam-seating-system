@@ -19,9 +19,6 @@ const Configurations = lazy(() =>
   }))
 );
 const Reports = lazy(() => import("./component/pages/Report"));
-const EmailNotifications = lazy(() =>
-  import("./component/pages/email-notifications")
-);
 const Dashboard = lazy(() => import("./component/pages/Dashboard"));
 const ExamSessionWizard = lazy(() =>
   import("./component/pages/ExamSession/ExamSessionWizard").then((module) => ({
@@ -29,6 +26,7 @@ const ExamSessionWizard = lazy(() =>
   }))
 );
 const RoomConfig = lazy(() => import("./component/pages/room-config"));
+const SiteActivation = lazy(() => import("./component/pages/site-activation"));
 const AdminPortal = lazy(() =>
   import("./adminportal/admin").then((module) => ({
     default: module.AdminPortal,
