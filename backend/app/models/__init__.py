@@ -8,3 +8,4 @@ from .allocation import *
 from .seat_allocation import *
 from .subject import *
 from .department import *
+from .site_activation import *

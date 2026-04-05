@@ -78,7 +78,18 @@ def bulk_create_service(data):
 def signup_service(data):
     db: Session = SessionLocal()
     try:
-        res = supabase.auth.sign_up({"email": data.email, "password": data.password})
+        res = supabase.auth.sign_up(
+            {
+                "email": data.email,
+                "password": data.password,
+                "options": {
+                    "data": {
+                        "full_name": data.full_name,
+                        "temp_password": False,
+                    }
+                },
+            }
+        )
         if not res or not res.user:
             raise HTTPException(status_code=400, detail="Signup failed")
         db_user = User(id=res.user.id, email=data.email, full_name=data.full_name, role="staff", is_approved=False)
