@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.allocation import Allocation
+from app.models.allocation import Allocation, AllocationExam
 from app.models.course import Course
 from app.models.exam import Exam
 from app.models.room import Room
@@ -14,6 +14,20 @@ from app.models.student import Student
 from app.schemas.site_activation import SiteActivationCreate, SiteActivationResponse
 
 router = APIRouter(prefix="/site-activation", tags=["Site Activation"])
+
+
+def _get_preferred_exam_for_allocation(allocation_id: int, db: Session):
+    return (
+        db.query(Exam)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .filter(AllocationExam.allocation_id == allocation_id)
+        .order_by(
+            # Prefer regular exam title when both regular/supply exist.
+            Exam.event_name.contains("(R)").desc(),
+            Exam.id.asc(),
+        )
+        .first()
+    )
 
 
 # ── POST / ────────────────────────────────────────────────────────────────────
@@ -36,7 +50,7 @@ def save_activation_window(payload: SiteActivationCreate, db: Session = Depends(
             detail=f"No allocation found for sem='{normalized_sem}' slot='{normalized_slot}'.",
         )
 
-    exam = db.query(Exam).filter(Exam.id == allocation.exam_id).first()
+    exam = _get_preferred_exam_for_allocation(allocation.id, db)
     if not exam:
         raise HTTPException(status_code=404, detail="No exam found for this allocation.")
 
@@ -102,7 +116,8 @@ def get_slots_summary(db: Session = Depends(get_db)):
             Exam.date,
             Exam.session,
         )
-        .join(Allocation, Allocation.exam_id == Exam.id)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .join(Allocation, Allocation.id == AllocationExam.allocation_id)
         .join(SeatAllocation, SeatAllocation.allocation_id == Allocation.id)
         .distinct()
         .order_by(Exam.event_name, Allocation.slot)
@@ -155,15 +170,12 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
             Room.room_number,
             Course.code.label("course_code"),
             Course.name.label("course_name"),
-            Exam.event_name,
-            Exam.session,
             Allocation.slot,
             Allocation.semester,
         )
         .join(Room,       Room.id       == SeatAllocation.room_id)
         .join(Course,     Course.id     == SeatAllocation.course_id)
         .join(Allocation, Allocation.id == SeatAllocation.allocation_id)
-        .join(Exam,       Exam.id       == Allocation.exam_id)
         .filter(
             SeatAllocation.student_id    == student.id,
             SeatAllocation.allocation_id == active_window.allocation_id,
@@ -173,11 +185,15 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
     if not seat:
         raise HTTPException(status_code=404, detail="no_seat_found")
 
+    exam = _get_preferred_exam_for_allocation(active_window.allocation_id, db)
+    if not exam:
+        raise HTTPException(status_code=404, detail="no_exam_found")
+
     col_letter  = chr(ord("A") + seat.col)       # 0→A, 1→B, 2→C …
     seat_number = f"{seat.row + 1}{col_letter}"  # row+1: 0→1, 1→2, etc.
     
     # Convert session to abbreviation: FORENOON->FN, AFTERNOON->AN
-    session_abbr = "FN" if seat.session and "FORENOON" in seat.session.upper() else "AN"
+    session_abbr = "FN" if exam.session and "FORENOON" in exam.session.upper() else "AN"
 
     return {
         "reg_no":      student.reg_no,
@@ -188,7 +204,7 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
         "col_label":   col_letter,
         "course_code": seat.course_code,
         "course_name": seat.course_name,
-        "event_name":  seat.event_name,
+        "event_name":  exam.event_name,
         "sem":         seat.semester,
         "slot":        seat.slot,
         "session":     session_abbr,
