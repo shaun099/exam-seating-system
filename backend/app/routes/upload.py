@@ -49,7 +49,7 @@ async def upload_excel(
         )
 
 
-# 📥 Upload Rooms (CSV)
+# 📥 Upload Rooms (CSV/Excel)
 @router.post("/rooms")
 async def upload_rooms(
     file: UploadFile = File(...),

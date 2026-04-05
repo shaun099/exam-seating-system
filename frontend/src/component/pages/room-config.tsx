@@ -6,6 +6,10 @@ import { Button } from "@/component/ui/button";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 import { RoomDetails } from "./roomdetails";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
+const ROOMS_ENDPOINT = `${API_BASE}/api/v1/upload/rooms`;
+const ROOMS_CREATE_ENDPOINT = `${API_BASE}/api/v1/upload/rooms/create`;
+
 interface RoomRecord {
   id: string;
   roomId: string;
@@ -33,7 +37,7 @@ export default function RoomConfig() {
 
   // ✅ FETCH ROOMS
   const fetchRooms = async (): Promise<RoomRecord[]> => {
-    const res = await fetch("http://127.0.0.1:8000/api/v1/upload/rooms");
+    const res = await fetch(ROOMS_ENDPOINT);
     const data: ApiRoom[] = await res.json();
 
     return data
@@ -77,17 +81,17 @@ export default function RoomConfig() {
     ? Math.round(totalCapacity / totalRooms)
     : 0;
 
-  // 📥 CSV UPLOAD
+  // 📥 FILE UPLOAD (CSV/Excel)
   const handleFileSelect = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
 
-    await fetch("http://127.0.0.1:8000/api/v1/upload/rooms", {
+    await fetch(ROOMS_ENDPOINT, {
       method: "POST",
       body: formData,
     });
 
-    alert("CSV uploaded ✅");
+    alert("File uploaded ✅");
     refreshRooms();
   };
 
@@ -108,7 +112,7 @@ export default function RoomConfig() {
 
   try {
     const res = await fetch(
-      `http://127.0.0.1:8000/api/v1/upload/rooms/${Number(roomId)}`,
+      `${ROOMS_ENDPOINT}/${Number(roomId)}`,
       { method: "DELETE" }
     );
 
@@ -165,7 +169,7 @@ export default function RoomConfig() {
     if (updatedRoom.id) {
       // ✏️ UPDATE
       res = await fetch(
-        `http://127.0.0.1:8000/api/v1/upload/rooms/${updatedRoom.id}`,
+        `${ROOMS_ENDPOINT}/${updatedRoom.id}`,
         {
           method: "PUT",
           headers: {
@@ -177,7 +181,7 @@ export default function RoomConfig() {
     } else {
       // ➕ CREATE
       res = await fetch(
-        "http://127.0.0.1:8000/api/v1/upload/rooms/create",
+        ROOMS_CREATE_ENDPOINT,
         {
           method: "POST",
           headers: {
@@ -242,7 +246,7 @@ export default function RoomConfig() {
 
           <div className="flex gap-2">
             <Button onClick={() => fileInputRef.current?.click()}>
-              Import CSV
+              Import File
             </Button>
 
             <Button onClick={handleAddNewRoom}>
@@ -257,7 +261,7 @@ export default function RoomConfig() {
           type="file"
           hidden
           ref={fileInputRef}
-          accept=".csv"
+          accept=".csv,.xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
           onChange={(e) => {
             if (e.target.files?.[0]) {
               handleFileSelect(e.target.files[0]);
@@ -377,7 +381,7 @@ export default function RoomConfig() {
                     </button>
                   </div>
                 ) : (
-                  <p>No rooms configured yet. Click "Add Room" or "Import CSV" to get started.</p>
+                  <p>No rooms configured yet. Click "Add Room" or "Import File" to get started.</p>
                 )}
               </div>
             )}

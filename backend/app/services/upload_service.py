@@ -437,65 +437,38 @@ class UploadService:
         }
     @staticmethod
     async def process_room_upload(file: UploadFile, db: Session):
-        from io import BytesIO
-        import pandas as pd
-
-        # Read file
         content = await file.read()
-        df = pd.read_csv(BytesIO(content))
+        parsed_rows, skipped = UploadService.parse_room_data(content, file.filename or "")
 
-        # Validate columns
-        required_columns = {"room_number", "rows", "cols"}
-        if not required_columns.issubset(df.columns):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid CSV format. Required columns: {required_columns}"
-            )
-
-        inserted = 0
-        skipped = []
-
-        #  Fetch all existing rooms ONCE (fixes 30 sec delay)
-        existing_rooms = {
-            r.room_number: r
-            for r in db.query(Room).all()
+        existing_room_numbers = {
+            room_number
+            for (room_number,) in db.query(Room.room_number).all()
         }
 
-        new_rooms = []
+        new_rooms: list[Room] = []
+        duplicate_count = 0
 
-        #  Faster than iterrows()
-        for row in df.to_dict(orient="records"):
-            try:
-                room_number = str(row["room_number"]).strip()
-                rows = int(row["rows"])
-                cols = int(row["cols"])
+        for row in parsed_rows:
+            room_number = row["room_number"]
+            if room_number in existing_room_numbers:
+                duplicate_count += 1
+                continue
 
-                # Skip invalid
-                if not room_number or rows <= 0 or cols <= 0:
-                    skipped.append({"row": row, "reason": "Invalid data"})
-                    continue
+            new_rooms.append(
+                Room(
+                    room_number=room_number,
+                    rows=row["row"],
+                    cols=row["column"],
+                )
+            )
+            existing_room_numbers.add(room_number)
 
-                # Avoid duplicates
-                if room_number not in existing_rooms:
-                    new_rooms.append(
-                        Room(
-                            room_number=room_number,
-                            rows=rows,
-                            cols=cols
-                        )
-                    )
-
-            except Exception as e:
-                skipped.append({"row": row, "error": str(e)})
-
-        # Bulk insert (FAST)
         if new_rooms:
             db.add_all(new_rooms)
             db.commit()
-            inserted = len(new_rooms)
 
         return {
             "message": "Room upload successful",
-            "inserted": inserted,
-            "skipped": len(skipped)
+            "inserted": len(new_rooms),
+            "skipped": len(skipped) + duplicate_count,
         }
