@@ -26,7 +26,8 @@ from app.models import (
     Exam,
     Branch,
     Room,
-    SiteActivation,
+    Subject,
+    Department,
 )
 
 app=FastAPI(

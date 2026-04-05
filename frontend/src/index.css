@@ -64,7 +64,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 }
 

@@ -1,17 +1,43 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 
-import { DashboardLayout } from "./component/layout/DashboardLayout";
-import { LoginForm } from "./Auth/login";
-import { SeatingAllocation } from "./component/pages/seating_allocation";
-import { Configurations } from "./component/pages/configuration";
-import Reports from "./component/pages/Report";
-import SiteActivation from "./component/pages/site-activation";
-import Dashboard from "./component/pages/Dashboard";
-import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
-import  RoomConfig  from "./component/pages/room-config";
-import { AdminPortal } from "./adminportal/admin";
-import AdminReports from "./adminportal/adminreports";
-import { ClassMatrixPreview } from "./component/pages/ClassMatrixPreview";
+const DashboardLayout = lazy(() =>
+  import("./component/layout/DashboardLayout").then((module) => ({
+    default: module.DashboardLayout,
+  }))
+);
+const LoginForm = lazy(() =>
+  import("./Auth/login").then((module) => ({ default: module.LoginForm }))
+);
+const SeatingAllocation = lazy(() =>
+  import("./component/pages/seating_allocation").then((module) => ({
+    default: module.SeatingAllocation,
+  }))
+);
+const Configurations = lazy(() =>
+  import("./component/pages/configuration").then((module) => ({
+    default: module.Configurations,
+  }))
+);
+const Reports = lazy(() => import("./component/pages/Report"));
+const Dashboard = lazy(() => import("./component/pages/Dashboard"));
+const ExamSessionWizard = lazy(() =>
+  import("./component/pages/ExamSession/ExamSessionWizard").then((module) => ({
+    default: module.ExamSessionWizard,
+  }))
+);
+const RoomConfig = lazy(() => import("./component/pages/room-config"));
+const SiteActivation = lazy(() => import("./component/pages/site-activation"));
+const AdminPortal = lazy(() =>
+  import("./adminportal/admin").then((module) => ({
+    default: module.AdminPortal,
+  }))
+);
+const AdminReports = lazy(() => import("./adminportal/adminreports"));
+const ClassMatrixPreview = lazy(() =>
+  import("./component/pages/ClassMatrixPreview").then((module) => ({
+    default: module.ClassMatrixPreview,
+  }))
+);
 
 type UserType = "admin" | "staff" | null;
 
@@ -78,21 +104,30 @@ function App() {
     setCurrentPage(page);
   };
 
+  const loadingFallback = (
+    <div className="p-6 text-sm text-muted-foreground">Loading...</div>
+  );
+
   // Show login if not logged in
   if (!userType) {
-    return <LoginForm onLogin={handleLogin} />;
+    return (
+      <Suspense fallback={loadingFallback}>
+        <LoginForm onLogin={handleLogin} />
+      </Suspense>
+    );
   }
 
   // Show Admin Portal for admin users
   if (userType === "admin") {
-    if (currentPage === "admin-reports") {
-      return (
-        <AdminReports onLogout={handleLogout} onNavigate={handleNavigate} />
-      );
-    }
-
-    // Default admin view
-    return <AdminPortal onLogout={handleLogout} onNavigate={handleNavigate} />;
+    return (
+      <Suspense fallback={loadingFallback}>
+        {currentPage === "admin-reports" ? (
+          <AdminReports onLogout={handleLogout} onNavigate={handleNavigate} />
+        ) : (
+          <AdminPortal onLogout={handleLogout} onNavigate={handleNavigate} />
+        )}
+      </Suspense>
+    );
   }
 
   // Staff Portal - render pages based on currentPage
@@ -136,14 +171,16 @@ function App() {
   };
 
   return (
-    <DashboardLayout
-      currentPage={currentPage}
-      breadcrumbs={breadcrumbMap[currentPage]}
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
-    >
-      {renderPage()}
-    </DashboardLayout>
+    <Suspense fallback={loadingFallback}>
+      <DashboardLayout
+        currentPage={currentPage}
+        breadcrumbs={breadcrumbMap[currentPage]}
+        onNavigate={handleNavigate}
+        onLogout={handleLogout}
+      >
+        {renderPage()}
+      </DashboardLayout>
+    </Suspense>
   );
 }
 

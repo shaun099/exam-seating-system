@@ -17,6 +17,31 @@ export function ExamSessionWizard({ onCancel, onNavigate }: ExamSessionWizardPro
   const [sessionConfig, setSessionConfig] = useState<any>(null)
   const [uploadPayload, setUploadPayload] = useState<any>(null)
 
+  const uploadStudentsFiles = async (files: File[]) => {
+    const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
+
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch(`${apiBase}/api/v1/upload/students`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        let message = `Failed to upload ${file.name}`
+        try {
+          const data = await response.json()
+          message = data?.message || message
+        } catch {
+          // keep default message when response body is not JSON
+        }
+        throw new Error(message)
+      }
+    }
+  }
+
   return (
     <div className="container mx-auto py-8 max-w-4xl">
       {step === "details" && (
@@ -45,8 +70,14 @@ export function ExamSessionWizard({ onCancel, onNavigate }: ExamSessionWizardPro
           payload={uploadPayload}
           onBack={() => setStep("import")}
           onCancel={onCancel}
-          // ✅ ROUTING LOGIC: This updates App.tsx's currentPage to "seating"
-          onGenerate={() => onNavigate("seating")} 
+          onGenerate={async (files) => {
+            try {
+              await uploadStudentsFiles(files)
+              onNavigate("seating")
+            } catch (error: any) {
+              alert(error?.message || "Student upload failed")
+            }
+          }}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent} from "@/component/ui/card"
+import { Card, CardContent } from "@/component/ui/card"
 import { Button } from "@/component/ui/button"
 import { Badge } from "@/component/ui/badge"
 import {
@@ -16,126 +16,59 @@ import {
   Users,
   LogOut,
   GraduationCap,
-  CheckCircle,
-  XCircle,
-  Clock,
   UserCheck,
   FileBarChart,
   UserMinus,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
 } from "lucide-react"
+import BulkUpload from "./BulkUpload"
 
 interface AdminPortalProps {
   onLogout: () => void
-  onNavigate: (page: string) => void 
-  initialView?: 'overview' | 'approvals'
+  onNavigate: (page: string) => void
+  initialView?: 'overview' | 'approvals' | 'bulk-upload'
 }
 
-interface PendingStaff {
+interface StaffMember {
   id: string
   name: string
   email: string
-  department?: string
-  requestedAt: string
   status: 'pending' | 'approved' | 'rejected'
+  requestedAt?: string
 }
 
 export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: AdminPortalProps) {
-
-  const [view, setView] = useState<'overview' | 'approvals'>(initialView)
-  const [pendingStaff, setPendingStaff] = useState<PendingStaff[]>([])
-
-  useEffect(() => {
-    setView(initialView)
-  }, [initialView])
+  const [view, setView] = useState<'overview' | 'approvals' | 'bulk-upload'>(initialView)
+  const [pendingStaff, setPendingStaff] = useState<StaffMember[]>([])
 
   const API_BASE = import.meta.env.VITE_API_URL
-  // ✅ FETCH USERS
+
   useEffect(() => {
     const token = localStorage.getItem("token")
-
     fetch(`${API_BASE}/admin/users`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setPendingStaff(data)
-        } else {
-          console.error("Invalid response:", data)
-          setPendingStaff([])
-        }
-      })
+      .then(data => Array.isArray(data) ? setPendingStaff(data) : setPendingStaff([]))
       .catch(() => setPendingStaff([]))
-  }, [])
+  }, [view])
 
-  // ✅ APPROVE
-  const handleApprove = async (id: string) => {
-    if (!confirm("Approve this staff member for portal access?")) return
-
+  const handleAction = async (id: string, endpoint: string, nextStatus: 'approved' | 'rejected' | 'pending') => {
     const token = localStorage.getItem("token")
-
-    await fetch(`${API_BASE}/admin/approve/${id}`, {
+    await fetch(`${API_BASE}/admin/${endpoint}/${id}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
-
-    setPendingStaff(prev =>
-      prev.map(staff =>
-        staff.id === id ? { ...staff, status: 'approved' } : staff
-      )
-    )
-  }
-
-  // ✅ REJECT
-  const handleReject = async (id: string) => {
-    if (!confirm("Reject this staff member's portal access request?")) return
-
-    const token = localStorage.getItem("token")
-
-    await fetch(`${API_BASE}/admin/revoke/${id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-
-    setPendingStaff(prev =>
-      prev.map(staff =>
-        staff.id === id ? { ...staff, status: 'rejected' } : staff
-      )
-    )
-  }
-
-  // ✅ REMOVE → back to pending
-  const handleRemove = async (id: string) => {
-    if (!confirm("Remove access for this staff member?")) return
-
-    const token = localStorage.getItem("token")
-
-    await fetch(`${API_BASE}/admin/revoke/${id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-
-    setPendingStaff(prev =>
-      prev.map(staff =>
-        staff.id === id ? { ...staff, status: 'pending' } : staff
-      )
-    )
+    setPendingStaff(prev => prev.map(s => s.id === id ? { ...s, status: nextStatus } : s))
   }
 
   const approvedCount = pendingStaff.filter(s => s.status === 'approved').length
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-slate-800 text-white shadow-lg">
+    // Changed to h-screen and flex-col to fix scrolling
+    <div className="h-screen flex flex-col bg-gray-50">
+      <header className="bg-slate-800 text-white shadow-lg flex-shrink-0">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -146,176 +79,133 @@ export function AdminPortal({ onLogout, onNavigate, initialView = 'overview' }: 
               <p className="text-sm text-slate-300 italic">SJCET Examination Cell</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={onLogout} 
-              className="bg-red-600 text-black shadow-sm hover:bg-red-800 transition-colors"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
-          </div>
+          <Button onClick={onLogout} className="bg-red-600 hover:bg-red-800 text-white">
+            <LogOut className="w-4 h-4 mr-2" /> Logout
+          </Button>
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-8">
+      {/* Main scrollable area */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-6 py-8">
+          {view === 'overview' && (
+            <div className="max-w-5xl mx-auto space-y-6">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+                <p className="text-gray-600">Manage staff access and system reports</p>
+              </div>
 
-        {view === 'overview' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-              <p className="text-gray-600 mt-1">Select an action to manage the examination system</p>
-            </div>
-
-            <Card className="border border-blue-100 bg-blue-50/50 mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
+              <Card className="border-blue-100 bg-blue-50/50 mb-6 w-full">
+                <CardContent className="p-6 flex items-center justify-between">
                   <div>
-                    <p className="text-blue-700 text-[10px] font-bold uppercase">
-                      Total Faculty Working
-                    </p>
-                    <p className="text-3xl font-black text-blue-900">
-                      {approvedCount}
-                    </p>
+                    <p className="text-blue-700 text-xs font-bold uppercase tracking-wider">Total Faculty Working</p>
+                    <p className="text-4xl font-black text-blue-900">{approvedCount}</p>
                   </div>
-                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card 
-                className="cursor-pointer hover:border-blue-500 transition-all shadow-sm group"
-                onClick={() => setView('approvals')}
-              >
-                <CardContent className="p-8 flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <UserCheck className="w-8 h-8 text-orange-600" />
-                  </div>
-                  <h3 className="text-xl font-bold">Staff Approvals</h3>
-                  <p className="text-gray-600 mt-2 text-sm">Review pending portal access requests</p>
+                  <Users className="w-12 h-12 text-blue-600 opacity-20" />
                 </CardContent>
               </Card>
 
-              <Card 
-                className="cursor-pointer hover:border-green-500 transition-all shadow-sm group"
-                onClick={() => onNavigate('admin-reports')}
-              >
-                <CardContent className="p-8 flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <FileBarChart className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-bold">System Reports</h3>
-                  <p className="text-gray-600 mt-2 text-sm">View reports</p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="cursor-pointer hover:border-orange-500 transition-all group" onClick={() => setView('approvals')}>
+                  <CardContent className="p-8 flex flex-col items-center">
+                    <UserCheck className="w-10 h-10 text-orange-600 mb-4 group-hover:scale-110 transition-transform" />
+                    <h3 className="font-bold text-lg">Staff Approvals</h3>
+                    <p className="text-xs text-gray-500">Manual signup requests</p>
+                  </CardContent>
+                </Card>
 
-        {view === 'approvals' && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => setView('overview')} className="text-gray-600">
-                <ArrowLeft className="w-4 h-4 mr-2" /> Back
-              </Button>
-              <h2 className="text-2xl font-bold text-gray-900">Staff Access Requests</h2>
-            </div>
+                <Card className="cursor-pointer hover:border-purple-500 transition-all group" onClick={() => setView('bulk-upload')}>
+                  <CardContent className="p-8 flex flex-col items-center">
+                    <Upload className="w-10 h-10 text-purple-600 mb-4 group-hover:scale-110 transition-transform" />
+                    <h3 className="font-bold text-lg">Mass Staff Approval</h3>
+                    <p className="text-xs text-gray-500">Excel Import (Auto-Create)</p>
+                  </CardContent>
+                </Card>
 
-            <Card className="border border-gray-200 shadow-sm overflow-hidden">
-              <CardContent className="p-0">
-                <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+                <Card className="cursor-pointer hover:border-green-500 transition-all group" onClick={() => onNavigate('admin-reports')}>
+                  <CardContent className="p-8 flex flex-col items-center">
+                    <FileBarChart className="w-10 h-10 text-green-600 mb-4 group-hover:scale-110 transition-transform" />
+                    <h3 className="font-bold text-lg">System Reports</h3>
+                    <p className="text-xs text-gray-500">View analytics</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {view === 'approvals' && (
+            <div className="space-y-6 max-w-5xl mx-auto">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" onClick={() => setView('overview')} className="text-gray-600">
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
+                </Button>
+                <h2 className="text-2xl font-bold text-gray-900">Staff Access Requests</h2>
+              </div>
+              
+              {/* Added overflow container around the table */}
+              <Card className="shadow-md border border-gray-200">
+                <div className="max-h-[70vh] overflow-y-auto">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-gray-50 z-10">
+                    <TableHeader className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                       <TableRow>
-                        <TableHead>Staff Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
+                        <TableHead className="bg-gray-50">Staff Details</TableHead>
+                        <TableHead className="bg-gray-50">Email</TableHead>
+                        <TableHead className="bg-gray-50">Status</TableHead>
+                        <TableHead className="text-center bg-gray-50">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
-
                     <TableBody>
-                      {pendingStaff.map((staff) => (
-                        <TableRow key={staff.id}>
-                          <TableCell>
-                            {staff.name}
-                            <p className="text-xs text-gray-400">{staff.requestedAt}</p>
-                          </TableCell>
-
-                          <TableCell>{staff.email}</TableCell>
-
-                          <TableCell>
-                            <Badge className={`${
-                              staff.status === 'pending'
-                                ? 'bg-orange-100 text-orange-700'
-                                : staff.status === 'approved'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {staff.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
-                              {staff.status === 'approved' && <CheckCircle className="w-3 h-3 mr-1" />}
-                              {staff.status === 'rejected' && <XCircle className="w-3 h-3 mr-1" />}
-                              {staff.status}
-                            </Badge>
-                          </TableCell>
-
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-2">
-                              {staff.status === 'pending' && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleApprove(staff.id)}
-                                    className="bg-green-600 hover:bg-green-700 text-white h-8 px-4 rounded-md"
-                                  >
-                                    Approve
+                      {pendingStaff.length > 0 ? (
+                        pendingStaff.map((staff) => (
+                          <TableRow key={staff.id}>
+                            <TableCell className="font-medium">
+                              {staff.name}
+                              {staff.requestedAt && <p className="text-[10px] text-gray-400 font-normal">{staff.requestedAt}</p>}
+                            </TableCell>
+                            <TableCell>{staff.email}</TableCell>
+                            <TableCell>
+                              <Badge className={
+                                staff.status === 'approved' ? 'bg-green-100 text-green-700' : 
+                                staff.status === 'pending' ? 'bg-orange-100 text-orange-700' : 
+                                'bg-red-100 text-red-700'
+                              }>
+                                {staff.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex justify-center gap-2">
+                                {staff.status === 'pending' && (
+                                  <>
+                                    <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAction(staff.id, 'approve', 'approved')}>Approve</Button>
+                                    <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleAction(staff.id, 'revoke', 'rejected')}>Reject</Button>
+                                  </>
+                                )}
+                                {staff.status === 'approved' && (
+                                  <Button size="sm" variant="destructive" onClick={() => handleAction(staff.id, 'revoke', 'pending')} className="flex items-center">
+                                    <UserMinus className="w-3 h-3 mr-2" /> Remove
                                   </Button>
-
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleReject(staff.id)}
-                                    className="h-8 px-4 rounded-md border border-red-500 text-red-600 bg-white hover:bg-red-50"
-                                  >
-                                    Reject
-                                  </Button>
-                                </>
-                              )}
-
-                              {staff.status === 'approved' && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleRemove(staff.id)}
-                                  className="h-8 px-4 rounded-md bg-red-600 hover:bg-red-700 text-white flex items-center"
-                                >
-                                  <UserMinus className="w-4 h-4 mr-2" />
-                                  Remove
-                                </Button>
-                              )}
-
-                              {staff.status === 'rejected' && (
-                                <span className="text-xs text-gray-400 italic">
-                                  Access Denied
-                                </span>
-                              )}
-                            </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-12 text-gray-500">
+                            No staff records found.
                           </TableCell>
-
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
-
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </Card>
+            </div>
+          )}
 
-      </div>
+          {view === 'bulk-upload' && <BulkUpload onBack={() => setView('overview')} />}
+        </div>
+      </main>
     </div>
   )
 }

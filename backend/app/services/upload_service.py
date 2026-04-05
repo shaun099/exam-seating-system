@@ -97,6 +97,23 @@ class UploadService:
         return str(value).strip().lower() not in {"false", "0", "no", "n"}
 
     @staticmethod
+    def parse_exam_date(value):
+        if value is None:
+            return None
+        if isinstance(value, float) and pd.isna(value):
+            return None
+
+        try:
+            parsed_value = pd.to_datetime(value, errors="coerce", dayfirst=True)
+        except Exception:
+            return None
+
+        if pd.isna(parsed_value):
+            return None
+
+        return parsed_value.date() if hasattr(parsed_value, "date") else None
+
+    @staticmethod
     def _read_file(content: bytes, filename: str) -> pd.DataFrame:
         """
         Route to the correct pandas reader based on file extension.
@@ -185,8 +202,7 @@ class UploadService:
             if column_map["course_code"]:
                 course_code = UploadService.clean_text(row[column_map["course_code"]]) or course_code
 
-            exam_date_parsed = pd.to_datetime(row[column_map["exam_date"]], errors="coerce")
-            exam_date = exam_date_parsed.date() if not pd.isna(exam_date_parsed) else None
+            exam_date = UploadService.parse_exam_date(row[column_map["exam_date"]])
 
             entry: dict[str, Any] = {
                 "reg_no":      reg_no,
