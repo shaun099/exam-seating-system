@@ -14,6 +14,7 @@ from app.models.allocation import Allocation, AllocationExam
 from app.models.course import Course
 from app.models.exam import Exam
 from app.models.room import Room
+from app.models.seating import Seating
 from app.models.seat_allocation import SeatAllocation
 from app.models.student import Student
 from app.schemas.class_matrix import ReplaceRoomPayload
@@ -51,6 +52,19 @@ class ClassMatrixService:
     @staticmethod
     def _format_course_code(code: str) -> str:
         return re.sub(r"([A-Za-z]+)(\d+)", r"\1 \2", code.strip())
+
+    @staticmethod
+    def _collapse_event_name(event_names: list[str]) -> str:
+        unique = [name for name in dict.fromkeys(event_names) if name]
+        if not unique:
+            return ""
+
+        regular = next((name for name in unique if "(R)" in name), None)
+        supply = next((name for name in unique if "(S)" in name), None)
+
+        if regular and supply:
+            return re.sub(r"\((R|S)\)", "(R/S)", regular, count=1)
+        return regular or supply or unique[0]
 
     # ------------------------------------------------------------------
     # DB fetch — joins through AllocationExam (no Allocation.exam_id)
@@ -127,8 +141,11 @@ class ClassMatrixService:
                 detail="Could not resolve exam for primary allocation.",
             )
 
+        base_event_names = [
+            exam_map[eid].event_name for eid in primary_exam_ids if eid in exam_map
+        ]
         base_exam_payload = {
-            "event_name": allocation_event_map[primary_alloc.id],
+            "event_name": ClassMatrixService._collapse_event_name(base_event_names),
             "date":       str(primary_exam.date),
             "sem":        normalized_sem,
             "slot":       normalized_slot,
@@ -144,14 +161,24 @@ class ClassMatrixService:
                 SeatAllocation.row,
                 SeatAllocation.col,
                 SeatAllocation.allocation_id,
+                SeatAllocation.student_id,
                 Student.reg_no,
                 Student.name.label("student_name"),
                 Course.code.label("course_code"),
                 Course.id.label("course_id"),
+                Exam.event_name.label("seat_event_name"),
             )
             .join(SeatAllocation, SeatAllocation.room_id == Room.id)
             .join(Student,        Student.id == SeatAllocation.student_id)
             .join(Course,         Course.id  == SeatAllocation.course_id)
+            .join(
+                Seating,
+                (Seating.student_id == SeatAllocation.student_id)
+                & (Seating.course_id == SeatAllocation.course_id)
+                & (Seating.slot == normalized_slot)
+                & (Seating.exam_id.in_(all_exam_ids)),
+            )
+            .join(Exam, Exam.id == Seating.exam_id)
             .filter(SeatAllocation.allocation_id.in_(allocation_ids))
             .order_by(Room.room_number, SeatAllocation.row, SeatAllocation.col)
             .all()
@@ -193,14 +220,20 @@ class ClassMatrixService:
                 "student_name": entry.student_name,
                 "course_code":  entry.course_code,
                 "course_id":    entry.course_id,
+                "event_name":   entry.seat_event_name,
             }
 
         room_payloads = []
         for room_group in grouped.values():
-            first_alloc_id  = room_group["first_allocation_id"]
-            room_event_name = allocation_event_map.get(
-                first_alloc_id, base_exam_payload["event_name"]
-            )
+            first_alloc_id = room_group["first_allocation_id"]
+            event_names = [
+                seat["event_name"] for seat in room_group["cells"].values() if seat.get("event_name")
+            ]
+            room_event_name = ClassMatrixService._collapse_event_name(event_names)
+            if not room_event_name:
+                room_event_name = allocation_event_map.get(
+                    first_alloc_id, base_exam_payload["event_name"]
+                )
             room_exam = dict(base_exam_payload)
             room_exam["event_name"] = room_event_name
 

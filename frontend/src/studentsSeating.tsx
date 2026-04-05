@@ -44,13 +44,6 @@ type LookupStatus =
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
 
-const fmtTime = (t: string) => {
-  const [h, m] = t.split(":").map(Number);
-  return Number.isFinite(h)
-    ? `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`
-    : t;
-};
-
 const prettyDate = (d: string) =>
   new Date(`${d}T00:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
@@ -321,11 +314,6 @@ export default function StudentSeatingPage() {
                   icon={<Calendar className="h-4 w-4" />}
                   label="Date"
                   value={prettyDate(result.date)}
-                />
-                <InfoRow
-                  icon={<Clock className="h-4 w-4" />}
-                  label="Time"
-                  value={`${fmtTime(result.start_time)} – ${fmtTime(result.end_time)}`}
                 />
               </div>
 

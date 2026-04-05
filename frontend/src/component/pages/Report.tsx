@@ -4,7 +4,6 @@ import {
   FileText,
   FolderArchive,
   ClipboardList,
-  Users,
   ChevronRight,
   ArrowLeft,
 } from "lucide-react"
@@ -96,6 +95,27 @@ const normalizeSlotData = (items: SlotSummaryApiItem[]): SemesterOption[] => {
 const getReportSlotCode = (slotName: string) =>
   slotName.replace(/^slot\s+/i, "").trim().toUpperCase();
 
+const persistAndNavigateReport = (
+  reportId: string,
+  sem: string,
+  slot: string,
+  onNavigate?: (page: string) => void,
+) => {
+  if (reportId === "matrix") {
+    localStorage.setItem("classMatrix.sem", sem);
+    localStorage.setItem("classMatrix.slot", slot);
+    onNavigate?.("class-matrix-preview");
+    return;
+  }
+
+  if (reportId === "seating" || reportId === "attendance") {
+    localStorage.setItem("report.type", reportId);
+    localStorage.setItem("report.sem", sem);
+    localStorage.setItem("report.slot", slot);
+    onNavigate?.("report-preview");
+  }
+};
+
 const reportTypes = [
   { 
     id: "seating", 
@@ -117,13 +137,6 @@ const reportTypes = [
     description: "Pre-formatted attendance sheets for invigilators",
     icon: ClipboardList, 
     color: "text-emerald-600 bg-emerald-50" 
-  },
-  { 
-    id: "duty", 
-    title: "Duty Chart", 
-    description: "Invigilator duty assignments by room and slot",
-    icon: Users, 
-    color: "text-purple-600 bg-purple-50" 
   },
 ];
 
@@ -269,13 +282,12 @@ const Reports: React.FC<ReportsProps> = ({ onNavigate }) => {
                     </button>
                   </div>
               
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {reportTypes.map((rpt, idx) => (
                       <div key={rpt.id} className={cn(
                         "p-8 group hover:bg-slate-50 transition-colors border-slate-100",
-                        idx !== 3 && "lg:border-r",
-                        idx < 2 && "border-b sm:border-b-0",
-                        idx === 1 && "lg:border-b-0"
+                        idx !== reportTypes.length - 1 && "lg:border-r",
+                        idx < 2 && "border-b sm:border-b-0"
                       )}>
                         <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6", rpt.color)}>
                           <rpt.icon size={24} />
@@ -284,12 +296,9 @@ const Reports: React.FC<ReportsProps> = ({ onNavigate }) => {
                         <p className="text-xs text-slate-400 font-medium mb-6 line-clamp-2 leading-relaxed">{rpt.description}</p>
                         <button
                           onClick={() => {
-                            if (rpt.id === "matrix") {
-                              localStorage.setItem("classMatrix.sem", extractSemesterFromEventName(report.eventName));
-                              localStorage.setItem("classMatrix.slot", getReportSlotCode(report.slotName));
-                              onNavigate?.("class-matrix-preview");
-                              return;
-                            }
+                            const sem = extractSemesterFromEventName(report.eventName);
+                            const slot = getReportSlotCode(report.slotName);
+                            persistAndNavigateReport(rpt.id, sem, slot, onNavigate);
                           }}
                           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all uppercase tracking-wider"
                         >
@@ -361,11 +370,10 @@ const Reports: React.FC<ReportsProps> = ({ onNavigate }) => {
                   </div>
                   <button
                     onClick={() => {
-                      if (report.id === "matrix" && selectedSlot) {
-                        localStorage.setItem("classMatrix.sem", extractSemesterFromEventName(selectedSlot.eventName));
-                        localStorage.setItem("classMatrix.slot", getReportSlotCode(selectedSlot.name));
-                        onNavigate?.("class-matrix-preview");
-                      }
+                      if (!selectedSlot) return;
+                      const sem = extractSemesterFromEventName(selectedSlot.eventName);
+                      const slot = getReportSlotCode(selectedSlot.name);
+                      persistAndNavigateReport(report.id, sem, slot, onNavigate);
                     }}
                     className="p-3.5 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
                   >

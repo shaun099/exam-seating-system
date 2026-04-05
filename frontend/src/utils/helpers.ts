@@ -34,7 +34,9 @@ import {
  */
 export const getAuthHeader = (): Record<string, string> => {
   if (typeof window === "undefined") return {};
-  const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
   return token ? { [AUTH_HEADER_KEY]: `Bearer ${token}` } : {};
 };
 
@@ -112,7 +114,10 @@ export const isValidSlot = (slot: string): boolean => {
  */
 export const isAuthenticated = (): boolean => {
   if (typeof window === "undefined") return false;
-  return !!localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  return !!(
+    localStorage.getItem("token") ||
+    localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)
+  );
 };
 
 /**

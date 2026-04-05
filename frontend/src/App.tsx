@@ -1,43 +1,18 @@
 import { Suspense, lazy, useState } from "react";
 
-const DashboardLayout = lazy(() =>
-  import("./component/layout/DashboardLayout").then((module) => ({
-    default: module.DashboardLayout,
-  }))
-);
-const LoginForm = lazy(() =>
-  import("./Auth/login").then((module) => ({ default: module.LoginForm }))
-);
-const SeatingAllocation = lazy(() =>
-  import("./component/pages/seating_allocation").then((module) => ({
-    default: module.SeatingAllocation,
-  }))
-);
-const Configurations = lazy(() =>
-  import("./component/pages/configuration").then((module) => ({
-    default: module.Configurations,
-  }))
-);
-const Reports = lazy(() => import("./component/pages/Report"));
-const Dashboard = lazy(() => import("./component/pages/Dashboard"));
-const ExamSessionWizard = lazy(() =>
-  import("./component/pages/ExamSession/ExamSessionWizard").then((module) => ({
-    default: module.ExamSessionWizard,
-  }))
-);
-const RoomConfig = lazy(() => import("./component/pages/room-config"));
-const SiteActivation = lazy(() => import("./component/pages/site-activation"));
-const AdminPortal = lazy(() =>
-  import("./adminportal/admin").then((module) => ({
-    default: module.AdminPortal,
-  }))
-);
-const AdminReports = lazy(() => import("./adminportal/adminreports"));
-const ClassMatrixPreview = lazy(() =>
-  import("./component/pages/ClassMatrixPreview").then((module) => ({
-    default: module.ClassMatrixPreview,
-  }))
-);
+import { DashboardLayout } from "./component/layout/DashboardLayout";
+import { LoginForm } from "./Auth/login";
+import { SeatingAllocation } from "./component/pages/seating_allocation";
+import { Configurations } from "./component/pages/configuration";
+import Reports from "./component/pages/Report";
+import SiteActivation from "./component/pages/site-activation";
+import Dashboard from "./component/pages/Dashboard";
+import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
+import  RoomConfig  from "./component/pages/room-config";
+import { AdminPortal } from "./adminportal/admin";
+import AdminReports from "./adminportal/adminreports";
+import { ClassMatrixPreview } from "./component/pages/ClassMatrixPreview";
+const ReportPreview = lazy(() => import("./component/pages/report-preview"));
 
 type UserType = "admin" | "staff" | null;
 
@@ -71,7 +46,12 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
   "class-matrix-preview": [
     { label: "Home", href: "/" },
     { label: "Class Matrix Preview" },
-  ],  
+  ],
+
+  "report-preview": [
+    { label: "Home", href: "/" },
+    { label: "Report Preview" },
+  ],
 
   "site-activation": [{ label: "Home", href: "/" }, { label: "Site Activation" }],
 };
@@ -150,6 +130,9 @@ function App() {
         const slot = localStorage.getItem("classMatrix.slot") || "A";
         return <ClassMatrixPreview sem={sem} slot={slot} onNavigate={handleNavigate} />;
       }
+
+      case "report-preview":
+        return <ReportPreview onNavigate={handleNavigate} />;
 
       case "exam-session":
         return (
