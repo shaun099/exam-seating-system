@@ -15,51 +15,6 @@ interface PreviewProps {
 
 const PAGE_SIZE = 10
 
-// Maps display label → possible raw header variations (lowercase, trimmed)
-const COLUMN_MAP: { label: string; keywords: string[] }[] = [
-  { label: "Student",     keywords: ["student"] },
-  { label: "Branch Name", keywords: ["branch name", "branch"] },
-  { label: "Event",       keywords: ["event"] },
-  { label: "Slot",        keywords: ["slot"] },
-  { label: "Course",      keywords: ["course"] },
-]
-
-function extractColumns(rawRows: any[][]): { headers: string[]; rows: any[][] } {
-  if (rawRows.length < 2) return { headers: [], rows: [] }
-
-  // Try each row as a potential header row (title rows often sit above)
-  let headerRowIdx = 0
-  let foundIndices: number[] = []
-
-  for (let r = 0; r < Math.min(5, rawRows.length); r++) {
-    const candidate = rawRows[r].map((c: any) => String(c ?? "").replace(/\s+/g, " ").trim().toLowerCase())
-    const indices = COLUMN_MAP.map(col =>
-      candidate.findIndex(h => col.keywords.some(kw => h.includes(kw)))
-    )
-    if (indices.filter(i => i !== -1).length >= 3) {
-      headerRowIdx = r
-      foundIndices = indices
-      break
-    }
-  }
-
-  const headers: string[] = []
-  const colIndices: number[] = []
-
-  COLUMN_MAP.forEach((col, i) => {
-    if (foundIndices[i] !== -1) {
-      headers.push(col.label)
-      colIndices.push(foundIndices[i])
-    }
-  })
-
-  const dataRows = rawRows.slice(headerRowIdx + 1).map(row =>
-    colIndices.map(i => String(row[i] ?? "").replace(/\s+/g, " ").trim())
-  )
-
-  return { headers, rows: dataRows }
-}
-
 export default function Preview({ payload, onBack, onCancel, onGenerate }: PreviewProps) {
   const [headers, setHeaders] = useState<string[]>([])
   const [allRows, setAllRows] = useState<string[][]>([])
@@ -70,40 +25,136 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
   const pagedRows = allRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   useEffect(() => {
-    if (!payload?.files?.length) return
-    const file = payload.files[0]
-    setLoading(true)
+    const processAllFiles = async () => {
+      const type = payload?.type
+      const items = payload?.data || payload?.files?.map((f: File) => ({ file: f })) || []
+      
+      if (!items.length) return
+      
+      setLoading(true)
+      let combinedHeaders: string[] = []
+      let combinedRows: string[][] = []
 
-    const reader = new FileReader()
-
-    reader.onload = (e: any) => {
       try {
-        const data = e.target.result
-        let rawRows: any[][] = []
-
-        if (file.name.toLowerCase().endsWith(".csv")) {
-          const text = data as string
-          rawRows = text.split("\n").filter(Boolean).map((r: string) => r.split(","))
-        } else if (/\.(xlsx|xls)$/i.test(file.name)) {
-          const workbook = XLSX.read(data, { type: "binary" })
-          // Use the first sheet (main data sheet)
-          const sheet = workbook.Sheets[workbook.SheetNames[0]]
-          rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
+        for (const item of items) {
+          const file = item.file
+          const rawRows = await readFile(file)
+          
+          if (type === "internal") {
+            const result = parseInternal(rawRows, item)
+            combinedHeaders = ["Batch", "Semester", "Student Name", "Course"]
+            combinedRows.push(...result)
+          } else if (type === "autonomous") {
+            const result = parseAutonomous(rawRows, item)
+            combinedHeaders = ["Register No", "Student Name", "Branch", "Semester", "Course"]
+            combinedRows.push(...result)
+          } else {
+            // KTU University / Default
+            const { headers: h, rows: r } = parseKTU(rawRows)
+            combinedHeaders = h
+            combinedRows.push(...r)
+          }
         }
-
-        const { headers, rows } = extractColumns(rawRows)
-        setHeaders(headers)
-        setAllRows(rows)
+        
+        setHeaders(combinedHeaders)
+        setAllRows(combinedRows)
         setPage(1)
       } finally {
         setLoading(false)
       }
     }
 
-    file.name.toLowerCase().endsWith(".csv")
-      ? reader.readAsText(file)
-      : reader.readAsBinaryString(file)
+    processAllFiles()
   }, [payload])
+
+  const readFile = (file: File): Promise<any[][]> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e: any) => {
+        const data = e.target.result
+        let rows: any[][] = []
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          rows = (data as string).split("\n").filter(Boolean).map(l => l.split(","))
+        } else {
+          const workbook = XLSX.read(data, { type: "binary" })
+          rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
+        }
+        resolve(rows)
+      }
+      file.name.toLowerCase().endsWith(".csv") ? reader.readAsText(file) : reader.readAsBinaryString(file)
+    })
+  }
+
+  const parseKTU = (rawRows: any[][]) => {
+    const map = [
+      { label: "Student", keys: ["student", "name"] },
+      { label: "Branch Name", keys: ["branch"] },
+      { label: "Course", keys: ["course"] },
+      { label: "Slot", keys: ["slot"] },
+      { label: "Event", keys: ["event"] },
+    ]
+    let headerIdx = 0
+    let indices = map.map(() => -1)
+
+    for (let r = 0; r < Math.min(10, rawRows.length); r++) {
+      const row = rawRows[r].map(c => String(c ?? "").toLowerCase())
+      const found = map.map(m => row.findIndex(h => m.keys.some(k => h.includes(k))))
+      if (found.filter(i => i !== -1).length >= 3) {
+        headerIdx = r; indices = found; break
+      }
+    }
+
+    const data = rawRows.slice(headerIdx + 1).map(row => 
+      indices.map(i => i !== -1 ? String(row[i] ?? "").trim() : "N/A")
+    ).filter(r => r[0] !== "" && r[0] !== "N/A")
+
+    return { headers: map.map(m => m.label), rows: data }
+  }
+
+  const parseInternal = (rawRows: any[][], item: any) => {
+    let nameIdx = -1
+    for (let r = 0; r < Math.min(10, rawRows.length); r++) {
+      const row = rawRows[r].map(c => String(c ?? "").toLowerCase())
+      nameIdx = row.findIndex(h => ["name", "student"].some(k => h.includes(k)))
+      if (nameIdx !== -1) break
+    }
+
+    let currentBatch = item.dept || "N/A"
+    let currentSem = item.semester || "N/A"
+    const results: string[][] = []
+
+    rawRows.forEach(row => {
+      const rowStr = row.join(" ").trim()
+      const headingMatch = rowStr.match(/Batch\s*:\s*([A-Z\s&]+).*\(S([1-8])\)/i)
+      if (headingMatch) {
+        currentBatch = headingMatch[1].trim(); currentSem = "S" + headingMatch[2]
+        return
+      }
+      const name = String(row[nameIdx] ?? "").trim()
+      if (name && isNaN(Number(name)) && !name.toLowerCase().includes("name")) {
+        results.push([currentBatch, currentSem, name, item.subjectName || "Internal Exam"])
+      }
+    })
+    return results
+  }
+
+  const parseAutonomous = (rawRows: any[][], item: any) => {
+    let regIdx = -1, nameIdx = -1
+    for (let r = 0; r < Math.min(10, rawRows.length); r++) {
+      const row = rawRows[r].map(c => String(c ?? "").toLowerCase())
+      regIdx = row.findIndex(h => ["register", "reg", "roll"].some(k => h.includes(k)))
+      nameIdx = row.findIndex(h => ["name", "student"].some(k => h.includes(k)))
+      if (regIdx !== -1 && nameIdx !== -1) break
+    }
+
+    return rawRows.slice(1).map(row => [
+      String(row[regIdx] ?? "").trim(),
+      String(row[nameIdx] ?? "").trim(),
+      item.dept || "N/A",
+      item.semester || "N/A",
+      item.subjectCode || "N/A"
+    ]).filter(r => r[1] !== "")
+  }
 
   return (
     <Card>
@@ -115,16 +166,15 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
       </CardHeader>
 
       <CardContent className="space-y-6">
-
-        {/* FILE LIST */}
         <div>
           <p className="font-medium mb-1">Uploaded Files:</p>
           {payload?.files?.map((file: File, i: number) => (
             <p key={i} className="text-sm text-muted-foreground">{file.name}</p>
+          )) || payload?.data?.map((item: any, i: number) => (
+            <p key={i} className="text-sm text-muted-foreground">{item.file.name}</p>
           ))}
         </div>
 
-        {/* ROW COUNT */}
         <div>
           <p className="font-medium">
             Total Entries:{" "}
@@ -132,14 +182,13 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
           </p>
         </div>
 
-        {/* TABLE */}
         {loading ? (
           <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
             Loading preview…
           </div>
         ) : headers.length === 0 ? (
           <div className="border rounded p-4 text-sm text-red-500">
-            Could not find expected columns. Make sure the file has: Student, Branch Name, Event, Slot, Course.
+            Could not parse data correctly. Check file headers.
           </div>
         ) : (
           <div className="overflow-auto border rounded max-h-72">
@@ -168,7 +217,6 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
           </div>
         )}
 
-        {/* PAGINATION */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
             <p className="text-muted-foreground">
@@ -176,28 +224,17 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
               {Math.min(page * PAGE_SIZE, allRows.length).toLocaleString()} of {allRows.length.toLocaleString()} entries
             </p>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline" size="icon"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
+              <Button variant="outline" size="icon" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="px-3 py-1 border rounded text-xs font-medium min-w-[60px] text-center">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="outline" size="icon"
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
+              <span className="px-3 py-1 border rounded text-xs font-medium min-w-[60px] text-center">{page} / {totalPages}</span>
+              <Button variant="outline" size="icon" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* TAGS */}
         {payload?.tags && (
           <div>
             <p className="font-medium mb-2">Tags:</p>
@@ -207,7 +244,6 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
           </div>
         )}
 
-        {/* ACTION BUTTONS */}
         <div className="flex justify-between pt-4 border-t">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -219,7 +255,6 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
             </Button>
           </div>
         </div>
-
       </CardContent>
     </Card>
   )

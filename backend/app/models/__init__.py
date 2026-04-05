@@ -6,3 +6,5 @@ from .branch import *
 from .room import *
 from .allocation import *
 from .seat_allocation import *
+from .exam_import import ExamImport
+from .subject import Subject

@@ -1,760 +1,695 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
-import { Upload, FileSpreadsheet, ArrowLeft, ArrowRight, Trash2 } from "lucide-react"
+import {
+  Upload, FileSpreadsheet, ArrowLeft, ArrowRight,
+  Trash2, Settings, Plus, ChevronDown, Loader2, AlertCircle,
+} from "lucide-react"
 import { Input } from "../../ui/input"
+import * as XLSX from "xlsx"
 
-const DEPARTMENTS: string[] = [
-  "Computer Science and Engineering",
-  "Artificial Intelligence and Data Science",
-  "Civil Engineering",
-  "Cyber Security",
-  "Computer Science with Artificial Intelligence",
-  "Electronics and Communications Engineering",
-  "Electronics and Computer Engineering",
-  "Electrical and Electronics Engineering",
-  "Mechanical Engineering"
-];
+// ------------------------------------------------------------------ //
+//  Constants & helpers                                                 //
+// ------------------------------------------------------------------ //
 
-const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map((semester) => `S${semester}`)
+const DEPT_PATTERNS = [
+  { pattern: /\bCSE\b|computer science/i,           dept: "Computer Science and Engineering" },
+  { pattern: /\bAD\b|artificial intelligence/i,     dept: "Artificial Intelligence and Data Science" },
+  { pattern: /\bCivil\b|\bCE\b/i,                   dept: "Civil Engineering" },
+  { pattern: /\bCC\b|cyber security/i,               dept: "Cyber Security" },
+  { pattern: /\bCA\b|computer science.*artificial/i, dept: "Computer Science with Artificial Intelligence" },
+  { pattern: /\bECE\b|electronics.*communications/i, dept: "Electronics and Communications Engineering" },
+  { pattern: /\bER\b|electronics.*computer/i,        dept: "Electronics and Computer Engineering" },
+  { pattern: /\bEEE\b|electrical/i,                  dept: "Electrical and Electronics Engineering" },
+  { pattern: /\bME\b|mechanical/i,                   dept: "Mechanical Engineering" },
+]
 
-const SYLLABUS: Record<string, Record<string, { name: string; code: string }[]>> = {
-  "S1": {
-    "All": [
-      { name: "Linear Algebra", code: "MAT 101" },
-      { name: "Engineering Physics A", code: "PHT 100" },
-      { name: "Engineering Physics B", code: "PHT 110" },
-      { name: "Engineering Graphics", code: "EST 110" },
-      { name: "Life Skills", code: "HUN 101" },
-      { name: "Engineering Chemistry", code: "CYT 100" },
-      { name: "Engineering Mechanics", code: "EST 100" },
-      { name: "Basics of Civil and Mechanical Engineering", code: "EST 120" },
-      { name: "Basics of Electrical and Electronic Engineering", code: "EST 130" }
-    ]
-  },
-  "S2": {
-    "All": [
-      { name: "Vector Calculus, Differential Equation", code: "MAT 102" },
-      { name: "Professional Communication", code: "HUN 102" },
-      { name: "Programming in C", code: "EST 102" },
-      { name: "Engineering Physics A", code: "PHT 100" },
-      { name: "Engineering Physics B", code: "PHT 110" },
-      { name: "Engineering Graphics", code: "EST 110" },
-      { name: "Engineering Chemistry", code: "CYT 100" },
-      { name: "Engineering Mechanics", code: "EST 100" }
-    ]
-  },
-  "S3": {
-    "Computer Science and Engineering": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
+const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => `S${s}`)
+const ALLOWED_EXTENSIONS = [".xlsx", ".xls", ".csv"]
+const ALLOWED_MIME = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+]
 
-    "Artificial Intelligence and Data Science": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
+const getDeptFromText = (text: string, fallback = "") =>
+  DEPT_PATTERNS.find((p) => p.pattern.test(text))?.dept ?? fallback
 
-    "Civil Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Mechanics of Solids", "code": "CET 201" },
-      { "name": "Fluid Mechanics and Hydraulics", "code": "CET 203" },
-      { "name": "Surveying and Geomatics", "code": "CET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
+const parseBatchLine = (
+  text: string,
+  defaults: { dept: string; semester: string; division: string }
+) => {
+  const semesterMatch = text.match(/\bS([1-8])\b/i)
+  const semester = semesterMatch ? `S${semesterMatch[1]}` : defaults.semester
 
-    "Cyber Security": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
+  const divisionMatch =
+    text.match(/division\s*[:.-]?\s*([A-Z]\d?)/i) ||
+    text.match(/\b([A-Z]\d?)\b\s*\(\s*S[1-8]\s*\)/i) ||
+    text.match(/\bS[1-8]\b\s*[-:/]\s*([A-Z]\d?)\b/i)
+  const division = divisionMatch ? divisionMatch[1].toUpperCase() : defaults.division
 
-    "Electrical and Electronics Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Circuits and Networks", "code": "EET 201" },
-      { "name": "Measurements and Instrumentation", "code": "EET 203" },
-      { "name": "Analog Electronics", "code": "EET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-
-    "Electronics and Communications Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Solid State Devices", "code": "ECT 201" },
-      { "name": "Logic Circuit Design", "code": "ECT 203" },
-      { "name": "Network Theory", "code": "ECT 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-
-    "Mechanical Engineering": [
-      { "name": "Partial Differential Equation & Complex Analysis", "code": "MAT 201" },
-      { "name": "Mechanics of Solids", "code": "MET 201" },
-      { "name": "Mechanics of Fluids", "code": "MET 203" },
-      { "name": "Metallurgy & Material Science", "code": "MET 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Object Oriented Programming using Java", "code": "CST 205" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-
-    "Electronics and Computer Engineering": [
-      { "name": "Discrete Mathematical Structures", "code": "MAT 203" },
-      { "name": "Solid State Devices", "code": "ECT 201" },
-      { "name": "Logic System Design", "code": "CST 203" },
-      { "name": "Data Structures", "code": "CST 201" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ]
-  },
-
-  "S4": {
-   "Computer Science and Engineering": [
-      { "name": "Graph Theory", "code": "MAT 206" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Database Management Systems", "code": "CST 204" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to Artificial Intelligence", "code": "ADT 202" },
-      { "name": "Data Storage and Management", "code": "ADT 204" },
-      { "name": "Machine Learning", "code": "ADT 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Civil Engineering": [
-      { "name": "Vector Calculus, Differential Equations and Transforms", "code": "MAT 202" },
-      { "name": "Engineering Geology", "code": "CET 202" },
-      { "name": "Structural Analysis I", "code": "CET 204" },
-      { "name": "Transportation Engineering", "code": "CET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Cyber Security": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to Cyber Security", "code": "CZT 202" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Probability, Statistics and Numerical Methods", "code": "MAT 256" },
-      { "name": "Introduction to AI", "code": "AIT 202" },
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Probability, Distributions and Numerical Methods", "code": "MAT 204" },
-      { "name": "Analog Circuits", "code": "ECT 202" },
-      { "name": "Signals and Systems", "code": "ECT 204" },
-      { "name": "Computer Organization", "code": "ECT 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Computer Organization and Architecture", "code": "CST 202" },
-      { "name": "Analog Circuits", "code": "ECT 202" },
-      { "name": "Operating Systems", "code": "CST 206" },
-      { "name": "Signals and Systems", "code": "ECT 204" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Probability, Distributions and Numerical Methods", "code": "MAT 204" },
-      { "name": "DC Machines and Transformers", "code": "EET 202" },
-      { "name": "Digital Electronics", "code": "EET 204" },
-      { "name": "Power System I", "code": "EET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Vector Calculus, Differential Equations and Transforms", "code": "MAT 202" },
-      { "name": "Engineering Thermodynamics", "code": "MET 202" },
-      { "name": "Manufacturing Process", "code": "MET 204" },
-      { "name": "Machine Tools and Metrology", "code": "MET 206" },
-      { "name": "Sustainable Engineering", "code": "MCN 201" },
-      { "name": "Constitution of India", "code": "MCN 202" },
-      { "name": "Design and Engineering", "code": "EST 200" },
-      { "name": "Professional Ethics", "code": "HUT 200" }
-    ]
-  },
-  "S5": {
-  "Computer Science and Engineering": [
-      { "name": "Formal Languages and Automata Theory", "code": "CST 301" },
-      { "name": "Computer Networks", "code": "CST 303" },
-      { "name": "System Software", "code": "CST 305" },
-      { "name": "Microprocessors and Microcontrollers", "code": "CST 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Civil Engineering": [
-      { "name": "Structural Analysis II", "code": "CET 301" },
-      { "name": "Design of Concrete Structures I", "code": "CET 303" },
-      { "name": "Geotechnical Engineering I", "code": "CET 305" },
-      { "name": "Hydrology & Water Resources Engineering", "code": "CET 307" },
-      { "name": "Management for Engineers", "code": "CET 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Linear Integrated Circuits", "code": "ECT 301" },
-      { "name": "Digital Communication", "code": "ECT 303" },
-      { "name": "Electromagnetic Waves", "code": "ECT 305" },
-      { "name": "Control Systems", "code": "ECT 307" },
-      { "name": "Management for Engineers", "code": "HUT 310" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Power System II", "code": "EET 301" },
-      { "name": "Microprocessors and Microcontrollers", "code": "EET 303" },
-      { "name": "Signals and Systems", "code": "EET 305" },
-      { "name": "Synchronous and Induction Machines", "code": "EET 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Mechanics of Machinery", "code": "MET 301" },
-      { "name": "Thermal Engineering I", "code": "MET 303" },
-      { "name": "Industrial Engineering", "code": "MET 305" },
-      { "name": "Design of Machine Elements I", "code": "MET 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Foundations of Machine Learning", "code": "ADT 301" },
-      { "name": "Database Management Systems", "code": "ADT 303" },
-      { "name": "Operating Systems", "code": "ADT 305" },
-      { "name": "Programming with Python", "code": "ADT 307" },
-      { "name": "Principles of Management", "code": "ADT 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Cyber Security": [
-      { "name": "Cryptography", "code": "CZT 301" },
-      { "name": "Network Security", "code": "CZT 303" },
-      { "name": "Secure Coding", "code": "CZT 305" },
-      { "name": "Digital Forensics", "code": "CZT 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Machine Learning", "code": "AIT 301" },
-      { "name": "Artificial Intelligence", "code": "AIT 303" },
-      { "name": "Data Analytics", "code": "AIT 305" },
-      { "name": "Neural Networks", "code": "AIT 307" },
-      { "name": "Management of Software Systems", "code": "CST 309" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Database Management Systems", "code": "CST 204" },
-      { "name": "Digital Communication", "code": "ECT 303" },
-      { "name": "Electromagnetic Waves", "code": "ECT 305" },
-      { "name": "Microprocessors and Microcontrollers", "code": "CST 307" },
-      { "name": "Disaster Management", "code": "MCN 301" }
-    ]
-  },
-  "S6": {
-    "Computer Science and Engineering": [
-      { "name": "Compiler Design", "code": "CST 302" },
-      { "name": "Computer Graphics and Image Processing", "code": "CST 304" },
-      { "name": "Algorithm Analysis and Design", "code": "CST 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Comprehensive Course Work", "code": "CST 308" },
-      { "name": "Foundations of Machine Learning", "code": "CST 312" },
-      { "name": "Data Analytics", "code": "CST 322" },
-      { "name": "Foundations of Security in Computing", "code": "CST 332" },
-      { "name": "Programming in Python", "code": "CST 362" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Electromagnetics", "code": "ECT 302" },
-      { "name": "VLSI Design", "code": "ECT 304" },
-      { "name": "Digital Signal Processing", "code": "ECT 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Embedded Systems", "code": "ECT 312" },
-      { "name": "Information Theory and Coding", "code": "ECT 322" },
-      { "name": "Data Structures", "code": "ECT 362" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Power Electronics", "code": "EET 302" },
-      { "name": "Control Systems", "code": "EET 304" },
-      { "name": "Power System Analysis", "code": "EET 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Electric Vehicles", "code": "EET 322" },
-      { "name": "Renewable Energy Systems", "code": "EET 342" },
-      { "name": "Digital Control Systems", "code": "EET 362" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Heat and Mass Transfer", "code": "MET 302" },
-      { "name": "Advanced Manufacturing Technology", "code": "MET 304" },
-      { "name": "Material Handling & Facilities Planning", "code": "MET 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Non-Destructive Testing", "code": "MET 312" },
-      { "name": "Industrial Safety", "code": "MET 322" },
-      { "name": "Automobile Engineering", "code": "MET 342" },
-      { "name": "Computational Fluid Dynamics", "code": "MET 362" }
-    ],
-    "Civil Engineering": [
-      { "name": "Design of Steel Structures", "code": "CET 302" },
-      { "name": "Environmental Engineering I", "code": "CET 304" },
-      { "name": "Design of Concrete Structures II", "code": "CET 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Advanced Structural Analysis", "code": "CET 312" },
-      { "name": "Geotechnical Engineering II", "code": "CET 322" },
-      { "name": "Transportation Engineering II", "code": "CET 332" },
-      { "name": "Water Resources Engineering", "code": "CET 362" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Soft Computing", "code": "ADT 302" },
-      { "name": "Data Visualization", "code": "ADT 304" },
-      { "name": "Natural Language Processing", "code": "ADT 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Advanced Machine Learning", "code": "ADT 312" },
-      { "name": "Data Mining and Data Warehousing", "code": "ADT 322" },
-      { "name": "Graph Theory", "code": "ADT 332" },
-      { "name": "Optimization Techniques", "code": "ADT 362" }
-    ],
-    "Cyber Security": [
-      { "name": "Cloud Security", "code": "CZT 302" },
-      { "name": "Ethical Hacking", "code": "CZT 304" },
-      { "name": "Cyber Laws and Ethics", "code": "CZT 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Mobile Security", "code": "CZT 312" },
-      { "name": "Malware Analysis", "code": "CZT 322" },
-      { "name": "IoT Security", "code": "CZT 332" },
-      { "name": "Wireless Security", "code": "CZT 362" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Cognitive Science", "code": "AIT 302" },
-      { "name": "Algorithm Analysis and Design", "code": "CST 306" },
-      { "name": "Computer Graphics", "code": "CST 304" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Robotics and AI", "code": "AIT 312" },
-      { "name": "Computer Vision", "code": "AIT 322" },
-      { "name": "Fuzzy Systems", "code": "AIT 332" },
-      { "name": "Deep Learning for AI", "code": "AIT 362" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Computer Networks", "code": "CST 303" },
-      { "name": "VLSI Design", "code": "ECT 304" },
-      { "name": "Digital Signal Processing", "code": "ECT 306" },
-      { "name": "Industrial Economics & Foreign Trade", "code": "HUT 300" },
-      { "name": "Embedded Systems", "code": "ECT 312" },
-      { "name": "Object Oriented Programming", "code": "CST 362" }
-    ]
-  },
-  "S7": {
-   "Computer Science and Engineering": [
-      { "name": "Artificial Intelligence", "code": "CST 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Machine Learning", "code": "CST 413" },
-      { "name": "Cloud Computing", "code": "CST 423" },
-      { "name": "Security in Computing", "code": "CST 433" },
-      { "name": "Model Based Software Development", "code": "CST 443" },
-      { "name": "Advanced Topics in IA32 Architecture", "code": "CST 453" },
-      { "name": "Web Programming", "code": "CST 463" },
-      { "name": "Natural Language Processing", "code": "CST 473" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Microwave and Antennas", "code": "ECT 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Machine Learning", "code": "ECT 413" },
-      { "name": "Optical Communication", "code": "ECT 423" },
-      { "name": "Satellite Communication", "code": "ECT 433" },
-      { "name": "Digital Image Processing", "code": "ECT 463" },
-      { "name": "Advanced Digital Signal Processing", "code": "ECT 473" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Advanced Control Systems", "code": "EET 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Electric Drives", "code": "EET 413" },
-      { "name": "Biomedical Instrumentation", "code": "EET 423" },
-      { "name": "Object Oriented Programming", "code": "EET 433" },
-      { "name": "Digital Signal Processing", "code": "EET 453" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Control Systems", "code": "MET 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Advanced Internal Combustion Engines", "code": "MET 413" },
-      { "name": "Optimization Techniques", "code": "MET 423" },
-      { "name": "Finite Element Analysis", "code": "MET 433" },
-      { "name": "Advanced Heat Transfer", "code": "MET 415" },
-      { "name": "Design of Transmission Systems", "code": "MET 425" },
-      { "name": "Entrepreneurship and Management", "code": "MET 435" }
-    ],
-    "Civil Engineering": [
-      { "name": "Environmental Engineering II", "code": "CET 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Prestressed Concrete", "code": "CET 413" },
-      { "name": "Ground Improvement Techniques", "code": "CET 423" },
-      { "name": "Air Quality Management", "code": "CET 433" },
-      { "name": "Design of Bridges", "code": "CET 415" },
-      { "name": "Construction Project Management", "code": "CET 425" },
-      { "name": "Environmental Impact Assessment", "code": "CET 435" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Deep Learning", "code": "ADT 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Cloud Computing", "code": "ADT 413" },
-      { "name": "Web Programming", "code": "ADT 423" },
-      { "name": "Big Data Analytics", "code": "ADT 433" },
-      { "name": "Computer Vision", "code": "ADT 463" },
-      { "name": "Bioinformatics", "code": "ADT 473" }
-    ],
-    "Cyber Security": [
-      { "name": "Artificial Intelligence in Cyber Security", "code": "CZT 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Penetration Testing", "code": "CZT 413" },
-      { "name": "Information Security Auditing", "code": "CZT 423" },
-      { "name": "Security Operations Center", "code": "CZT 433" },
-      { "name": "Steganography", "code": "CZT 463" },
-      { "name": "Intrusion Detection Systems", "code": "CZT 473" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Deep Learning", "code": "AIT 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Reinforcement Learning", "code": "AIT 413" },
-      { "name": "Big Data Systems", "code": "AIT 423" },
-      { "name": "Natural Language Processing", "code": "AIT 433" },
-      { "name": "Knowledge Representation", "code": "AIT 463" },
-      { "name": "Search Engine Optimization", "code": "AIT 473" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Embedded System Design", "code": "ECT 401" },
-      { "name": "Industrial Safety Engineering", "code": "MCN 401" },
-      { "name": "Real Time Systems", "code": "ERT 413" },
-      { "name": "Cyber Security", "code": "ERT 423" },
-      { "name": "Cloud Computing", "code": "ERT 433" }
-    ]
-  },
-  "S8": {
-    "Computer Science and Engineering": [
-      { "name": "Distributed Computing", "code": "CST 402" },
-      { "name": "Deep Learning", "code": "CST 414" },
-      { "name": "Programming Paradigms", "code": "CST 424" },
-      { "name": "Cryptography", "code": "CST 434" },
-      { "name": "Soft Computing", "code": "CST 444" },
-      { "name": "Fuzzy Set Theory and Applications", "code": "CST 454" },
-      { "name": "Embedded Systems", "code": "CST 464" },
-      { "name": "Computer Vision", "code": "CST 474" },
-      { "name": "Formal Methods and Tools in Software Engineering", "code": "CST 416" },
-      { "name": "Client Server Architecture", "code": "CST 426" },
-      { "name": "Parallel Computing", "code": "CST 436" },
-      { "name": "Data Compression Techniques", "code": "CST 446" },
-      { "name": "Unified Extended Firmware Interface", "code": "CST 456" },
-      { "name": "Data Mining", "code": "CST 466" },
-      { "name": "Mobile Computing", "code": "CST 476" },
-      { "name": "High Performance Computing", "code": "CST 418" },
-      { "name": "Block Chain Technologies", "code": "CST 428" },
-      { "name": "Image Processing Technique", "code": "CST 438" },
-      { "name": "Internet of Things", "code": "CST 448" },
-      { "name": "Software Testing", "code": "CST 458" },
-      { "name": "Bioinformatics", "code": "CST 468" },
-      { "name": "Computational Linguistics", "code": "CST 478" }
-    ],
-    "Electronics and Communications Engineering": [
-      { "name": "Mixed Signal Design", "code": "ECT 402" },
-      { "name": "Nanoelectronics", "code": "ECT 414" },
-      { "name": "Computer Communication Networks", "code": "ECT 424" },
-      { "name": "Robotics", "code": "ECT 434" },
-      { "name": "CMOS Circuit Design", "code": "ECT 464" },
-      { "name": "Internet of Things", "code": "ECT 474" }
-    ],
-    "Electrical and Electronics Engineering": [
-      { "name": "Electrical Machine Design", "code": "EET 402" },
-      { "name": "Power Quality", "code": "EET 414" },
-      { "name": "Advanced Power Electronics", "code": "EET 424" },
-      { "name": "Energy Management", "code": "EET 434" },
-      { "name": "Smart Grid", "code": "EET 444" }
-    ],
-    "Mechanical Engineering": [
-      { "name": "Energy Engineering", "code": "MET 402" },
-      { "name": "Renewable Energy Engineering", "code": "MET 414" },
-      { "name": "Gas Dynamics and Jet Propulsion", "code": "MET 424" },
-      { "name": "Robotics", "code": "MET 434" },
-      { "name": "Advanced Manufacturing Technology", "code": "MET 416" },
-      { "name": "Mechatronics", "code": "MET 426" },
-      { "name": "Computer Integrated Manufacturing", "code": "MET 436" }
-    ],
-    "Civil Engineering": [
-      { "name": "Quantity Surveying and Valuation", "code": "CET 402" },
-      { "name": "Advanced Foundation Engineering", "code": "CET 414" },
-      { "name": "Industrial Waste Management", "code": "CET 424" },
-      { "name": "Pavement Evaluation and Management", "code": "CET 434" },
-      { "name": "Construction Planning and Management", "code": "CET 416" },
-      { "name": "Geo-environmental Engineering", "code": "CET 426" },
-      { "name": "Structural Dynamics", "code": "CET 436" }
-    ],
-    "Artificial Intelligence and Data Science": [
-      { "name": "Reinforcement Learning", "code": "ADT 402" },
-      { "name": "Distributed Computing", "code": "ADT 414" },
-      { "name": "Blockchain Technologies", "code": "ADT 424" },
-      { "name": "Edge Computing", "code": "ADT 434" },
-      { "name": "Ethics in AI", "code": "ADT 444" },
-      { "name": "Video Analytics", "code": "ADT 464" },
-      { "name": "Social Network Analysis", "code": "ADT 474" }
-    ],
-    "Cyber Security": [
-      { "name": "Blockchain Technologies", "code": "CZT 402" },
-      { "name": "Cyber Warfare", "code": "CZT 414" },
-      { "name": "Secure Software Engineering", "code": "CZT 424" },
-      { "name": "Quantum Cryptography", "code": "CZT 434" },
-      { "name": "Biometric Security", "code": "CZT 444" },
-      { "name": "Advanced Malware Analysis", "code": "CZT 464" },
-      { "name": "Cyber Incident Response", "code": "CZT 474" }
-    ],
-    "Computer Science with Artificial Intelligence": [
-      { "name": "Human Computer Interaction", "code": "AIT 402" },
-      { "name": "Multi-agent Systems", "code": "AIT 414" },
-      { "name": "AI in Healthcare", "code": "AIT 424" },
-      { "name": "Expert Systems", "code": "AIT 434" },
-      { "name": "Game Theory and AI", "code": "AIT 444" },
-      { "name": "Speech Processing", "code": "AIT 464" },
-      { "name": "Autonomous Systems", "code": "AIT 474" }
-    ],
-    "Electronics and Computer Engineering": [
-      { "name": "Distributed Systems", "code": "CST 402" },
-      { "name": "Internet of Things", "code": "ERT 414" },
-      { "name": "Artificial Intelligence", "code": "ERT 424" },
-      { "name": "Mobile Computing", "code": "ERT 434" }
-    ]
-  }
-};
-
-interface FileWithTags {
-  id: string
-  file: File
-  batch: string
-  semester: string
-  dept: string
-  subjectName: string
-  subjectCode: string
-  division: string
+  const dept = getDeptFromText(text, defaults.dept)
+  return { dept, semester, division }
 }
 
-export function DataImportInternal({ onUpload, onBack }: { onUpload: (data: any) => void; onBack: () => void }) {
-  const [isDragging, setIsDragging] = useState(false)
-  const [fileEntries, setFileEntries] = useState<FileWithTags[]>([])
+const isValidFile = (file: File) => {
+  const ext = "." + file.name.split(".").pop()?.toLowerCase()
+  return ALLOWED_EXTENSIONS.includes(ext) || ALLOWED_MIME.includes(file.type)
+}
 
-  const processFiles = (files: File[]) => {
-    const newEntries: FileWithTags[] = files.map(f => ({
-      id: Math.random().toString(36).substring(7),
-      file: f,
-      batch: "",
-      semester: "",
-      dept: "",
-      subjectName: "",
-      subjectCode: "",
-      division: ""
-    }))
-    setFileEntries(prev => [...prev, ...newEntries])
+// ------------------------------------------------------------------ //
+//  Types                                                               //
+// ------------------------------------------------------------------ //
+
+interface Subject {
+  course_name: string
+  course_code: string
+}
+
+interface Syllabus {
+  [semester: string]: {
+    [department: string]: Subject[]
   }
+}
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setIsDragging(false)
-    const dropped = Array.from(e.dataTransfer.files).filter(f => /\.(csv|xlsx|xls)$/i.test(f.name))
-    processFiles(dropped)
+interface FileEntry {
+  id: string
+  file: File
+  dept: string
+  semester: string
+  division: string
+  batch: string
+  subjectName: string
+  subjectCode: string
+  studentCount: number
+  startRow: number
+  endRow: number
+}
+
+// Per-dept add-form state, keyed by `${sem}__${dept}`
+type AddFormState = Record<string, { name: string; code: string }>
+
+// ------------------------------------------------------------------ //
+//  Component                                                           //
+// ------------------------------------------------------------------ //
+
+export function DataImportInternal({
+  onUpload,
+  onBack,
+}: {
+  onUpload: (data: any) => void
+  onBack: () => void
+}) {
+  const [fileEntries, setFileEntries] = useState<FileEntry[]>([])
+  const [isManaging, setIsManaging] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  // FIX #7 — surface backend errors in the UI
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [syllabus, setSyllabus] = useState<Syllabus>({})
+  const [departments, setDepartments] = useState<string[]>([])
+  const [expandedSem, setExpandedSem] = useState<string | null>(null)
+  // FIX #1 — isolated add-form state per semester+department key
+  const [addForms, setAddForms] = useState<AddFormState>({})
+
+  // ---------------------------------------------------------------- //
+  //  Backend fetch                                                     //
+  // ---------------------------------------------------------------- //
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setFetchError(null)
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/exams/subjects")
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const data: any[] = await res.json()
+
+      // FIX #6 — deduplicate departments from backend
+      const uniqueDepts = Array.from(
+        new Set(data.map((s) => (s.department ?? "").trim()).filter(Boolean))
+      ) as string[]
+      setDepartments(uniqueDepts)
+
+      const grouped = data.reduce<Syllabus>((acc, sub) => {
+        const sem = (sub.semester ?? "").trim()
+        const dept = (sub.department ?? "").trim()
+        if (!sem || !dept) return acc
+        if (!acc[sem]) acc[sem] = {}
+        if (!acc[sem][dept]) acc[sem][dept] = []
+        acc[sem][dept].push({ course_name: sub.course_name, course_code: sub.course_code })
+        return acc
+      }, {})
+
+      setSyllabus(grouped)
+    } catch (e: any) {
+      // FIX #7 — show visible error instead of silent console.error
+      setFetchError(e.message ?? "Could not connect to server")
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
-  const updateTag = (id: string, field: keyof FileWithTags, value: string) => {
-    setFileEntries(prev => prev.map(entry => {
-      if (entry.id !== id) return entry;
-      const updated = { ...entry, [field]: value };
+  useEffect(() => { loadData() }, [loadData])
 
-      if (field === "batch" || field === "semester" || field === "dept") {
-        updated.subjectName = "";
-        updated.subjectCode = "";
-        return updated;
-      }
-      
-      if (field === "subjectName") {
-        const semesterData = SYLLABUS[updated.semester];
-        const deptData = semesterData?.[updated.dept] || semesterData?.["All"];
-        const subject = deptData?.find(s => s.name === value);
-        updated.subjectCode = subject ? subject.code : "";
-      }
-      return updated;
-    }))
+  // ---------------------------------------------------------------- //
+  //  Subject lookup                                                    //
+  // ---------------------------------------------------------------- //
+
+  const getSubjectsFor = (semester: string, dept: string): Subject[] => {
+    const semData = syllabus[semester] ?? {}
+
+    // Exact match first
+    if (semData[dept]) return semData[dept]
+
+    // Case-insensitive fallback
+    const matchedKey = Object.keys(semData).find(
+      (key) => key.trim().toLowerCase() === dept.trim().toLowerCase()
+    )
+    if (matchedKey) return semData[matchedKey]
+
+    // FIX #4 — removed "All" catch-all; return empty so UI shows "no subjects"
+    return []
   }
 
-  const removeFile = (id: string) => setFileEntries(prev => prev.filter(e => e.id !== id))
+  // ---------------------------------------------------------------- //
+  //  Syllabus management actions                                       //
+  // ---------------------------------------------------------------- //
 
-  const getSubjects = (batch: string, semester: string, dept: string) => {
-    if (!batch || !semester) return [];
-    if (!semester) return [];
-    const semesterData = SYLLABUS[semester];
-    if (!semesterData) return [];
-    if (["S1", "S2"].includes(semester)) return semesterData["All"] || [];
-    return semesterData[dept] || [];
-  };
+  const handleAdd = async (sem: string, dept: string) => {
+    const key = `${sem}__${dept}`
+    const form = addForms[key] ?? { name: "", code: "" }
+    if (!form.name.trim() || !form.code.trim()) return
+
+    await fetch("http://localhost:8000/api/v1/exams/subjects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        semester: sem,
+        department: dept,
+        batch: "KTU",
+        course_name: form.name.trim(),
+        course_code: form.code.trim().toUpperCase(),
+      }),
+    })
+
+    // Clear only this form's state
+    setAddForms((prev) => ({ ...prev, [key]: { name: "", code: "" } }))
+    loadData()
+  }
+
+  // FIX #2 — confirmation before delete
+  const handleDelete = async (courseCode: string, courseName: string) => {
+    if (!window.confirm(`Delete "${courseName}" (${courseCode})?`)) return
+
+    const res = await fetch(
+      `http://localhost:8000/api/v1/exams/subjects/${courseCode}`,
+      { method: "DELETE" }
+    )
+    // FIX #10 — server now returns 404 for missing codes; surface it here
+    if (!res.ok && res.status === 404) {
+      alert(`Subject "${courseCode}" was not found on the server.`)
+      return
+    }
+    loadData()
+  }
+
+  // ---------------------------------------------------------------- //
+  //  File processing                                                   //
+  // ---------------------------------------------------------------- //
+
+  const processFiles = async (files: File[]) => {
+    // FIX #8 — reject unsupported files before passing to XLSX.read
+    const validFiles = files.filter(isValidFile)
+    const rejected = files.length - validFiles.length
+    if (rejected > 0) {
+      alert(`${rejected} file(s) skipped — only .csv, .xlsx and .xls files are accepted.`)
+    }
+    if (validFiles.length === 0) return
+
+    const newEntries: FileEntry[] = []
+
+    for (const f of validFiles) {
+      // FIX #3 — skip exact duplicate files already in the list
+      const alreadyAdded = fileEntries.some(
+        (e) => e.file.name === f.name && e.file.size === f.size
+      )
+      if (alreadyAdded) continue
+
+      const rows: any[][] = await new Promise((res) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const wb = XLSX.read(e.target?.result, { type: "array" })
+          res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }))
+        }
+        reader.readAsArrayBuffer(f)
+      })
+
+      const headerText = rows
+        .slice(0, 80)
+        .map((row) => (row ?? []).join(" "))
+        .join(" ")
+
+      const globalDept = getDeptFromText(headerText, "")
+      const globalSemMatch = headerText.match(/\bS([1-8])\b/i)
+      const globalSemester = globalSemMatch ? `S${globalSemMatch[1]}` : ""
+      const globalDivMatch =
+        headerText.match(/division\s*[:.-]?\s*([A-Z]\d?)/i) ||
+        headerText.match(/\b([A-Z]\d?)\b\s*\(\s*S[1-8]\s*\)/i)
+      const globalDivision = globalDivMatch ? globalDivMatch[1].toUpperCase() : "NA"
+
+      const blocks: { start: number; dept: string; sem: string; div: string }[] = []
+      rows.forEach((row, idx) => {
+        const txt = (row ?? []).join(" ")
+        if (/batch\s*:/i.test(txt)) {
+          const parsed = parseBatchLine(txt, {
+            dept: globalDept,
+            semester: globalSemester,
+            division: globalDivision,
+          })
+          blocks.push({ start: idx, dept: parsed.dept, sem: parsed.semester, div: parsed.division })
+        }
+      })
+
+      const perFileEntries: FileEntry[] = []
+
+      if (blocks.length === 0) {
+        perFileEntries.push({
+          id: Math.random().toString(36).substr(2, 9),
+          file: f,
+          dept: globalDept,
+          semester: globalSemester,
+          division: globalDivision,
+          batch: "KTU",
+          subjectName: "",
+          subjectCode: "",
+          studentCount: rows.length,
+          startRow: 0,
+          endRow: rows.length,
+        })
+      } else {
+        blocks.forEach((meta, i) => {
+          const end = blocks[i + 1]?.start ?? rows.length
+          const count = rows
+            .slice(meta.start + 1, end)
+            .filter((r) => (r ?? []).some((cell: any) => String(cell ?? "").trim() !== ""))
+            .length
+          perFileEntries.push({
+            id: Math.random().toString(36).substr(2, 9),
+            file: f,
+            dept: meta.dept,
+            semester: meta.sem,
+            division: meta.div,
+            batch: "KTU",
+            subjectName: "",
+            subjectCode: "",
+            studentCount: count,
+            startRow: meta.start,
+            endRow: end,
+          })
+        })
+      }
+
+      // Merge repeated departments within one file into a single card
+      const groupedByDept = perFileEntries.reduce<Record<string, FileEntry>>((acc, entry) => {
+        const deptKey = entry.dept || "Unknown Department"
+        if (!acc[deptKey]) {
+          acc[deptKey] = { ...entry }
+        } else {
+          acc[deptKey].studentCount += entry.studentCount
+          acc[deptKey].startRow = Math.min(acc[deptKey].startRow, entry.startRow)
+          acc[deptKey].endRow = Math.max(acc[deptKey].endRow, entry.endRow)
+          if (!acc[deptKey].semester && entry.semester) acc[deptKey].semester = entry.semester
+          if ((!acc[deptKey].division || acc[deptKey].division === "NA") && entry.division) {
+            acc[deptKey].division = entry.division
+          } else if (
+            entry.division &&
+            acc[deptKey].division &&
+            acc[deptKey].division !== "NA" &&
+            entry.division !== "NA" &&
+            acc[deptKey].division !== entry.division
+          ) {
+            acc[deptKey].division = "Mixed"
+          }
+        }
+        return acc
+      }, {})
+
+      newEntries.push(...Object.values(groupedByDept))
+    }
+
+    // FIX #6 — merge newly detected departments without duplicates
+    const detectedDepts = newEntries.map((e) => e.dept).filter(Boolean)
+    if (detectedDepts.length) {
+      setDepartments((prev) => Array.from(new Set([...prev, ...detectedDepts])))
+    }
+
+    setFileEntries((prev) => [...prev, ...newEntries])
+  }
+
+  // ---------------------------------------------------------------- //
+  //  Tag card updates                                                  //
+  // ---------------------------------------------------------------- //
+
+  const updateTag = (id: string, field: string, value: string) => {
+    setFileEntries((prev) =>
+      prev.map((e) => {
+        if (e.id !== id) return e
+        const updated = { ...e, [field]: value }
+        if (field === "subjectName") {
+          const sub = getSubjectsFor(updated.semester, updated.dept).find(
+            (s) => s.course_name === value
+          )
+          updated.subjectCode = sub ? sub.course_code : ""
+        }
+        return updated
+      })
+    )
+  }
+
+  // ---------------------------------------------------------------- //
+  //  Validation                                                        //
+  // ---------------------------------------------------------------- //
+
+  // FIX #5 — per-card validation messages so users know exactly what's missing
+  const getMissingField = (entry: FileEntry): string | null => {
+    if (!entry.semester) return "Semester"
+    if (!entry.dept) return "Branch"
+    if (!entry.subjectCode) return "Subject"
+    return null
+  }
+
+  const allValid = fileEntries.length > 0 && fileEntries.every((e) => !getMissingField(e))
+
+  // ---------------------------------------------------------------- //
+  //  Render                                                            //
+  // ---------------------------------------------------------------- //
+
+  if (isLoading) {
+    return (
+      <div className="p-20 text-center">
+        <Loader2 className="animate-spin mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Loading subjects…</p>
+      </div>
+    )
+  }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle className="text-xl">Internal Exam Upload</CardTitle>
-        <p className="text-sm text-muted-foreground">Upload files and tag specific details for each</p>
+    <Card className="w-full max-w-4xl mx-auto shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+        <div>
+          <CardTitle className="text-xl font-bold">Internal Import</CardTitle>
+          <p className="text-sm text-muted-foreground">Internal examination data uploading platform</p>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => setIsManaging(!isManaging)}>
+          <Settings className={`w-5 h-5 ${isManaging ? "text-primary" : ""}`} />
+        </Button>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        <div
-          onDrop={handleDrop}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-          onDragLeave={() => setIsDragging(false)}
-          className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-            isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-          }`}
-        >
-          <div className="space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
-              <Upload className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="font-medium text-lg">Upload Student Data</p>
-              <p className="text-sm text-muted-foreground">Drag and drop your files here, or click to browse</p>
-            </div>
-            <input type="file" multiple accept=".csv,.xlsx,.xls" className="hidden" id="file-input" 
-              onChange={(e) => processFiles(Array.from(e.target.files || []))} 
-            />
-            <label htmlFor="file-input">
-              <Button variant="outline" asChild className="cursor-pointer">
-                <span>Browse Files</span>
-              </Button>
-            </label>
+      <CardContent className="space-y-6 pt-6">
+
+        {/* FIX #7 — visible error banner */}
+        {fetchError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>Could not load subjects: {fetchError}</span>
+            <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={loadData}>
+              Retry
+            </Button>
           </div>
-        </div>
+        )}
 
-        {/* --- SCROLLER --- */}
-        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-          {fileEntries.map((entry) => {
-            const availableSubjects = getSubjects(entry.batch, entry.semester, entry.dept);
-            return (
-              <div key={entry.id} className="p-4 border rounded-lg bg-slate-50/50 space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <div className="flex items-center gap-2 text-emerald-600">
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span className="text-sm font-semibold truncate max-w-xs">{entry.file.name}</span>
+        {!isManaging ? (
+          <>
+            {/* Drop zone */}
+            <div
+              onDrop={(e) => { e.preventDefault(); processFiles(Array.from(e.dataTransfer.files)) }}
+              onDragOver={(e) => e.preventDefault()}
+              className="border-2 border-dashed rounded-xl p-10 text-center hover:bg-slate-50 transition-all cursor-pointer"
+            >
+              <Upload className="mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">Drop student lists here</p>
+              <p className="text-xs text-muted-foreground mt-1">.csv, .xlsx and .xls</p>
+              <input
+                type="file"
+                multiple
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                id="f-in"
+                onChange={(e) => processFiles(Array.from(e.target.files ?? []))}
+              />
+              <Button variant="outline" size="sm" className="mt-4" asChild>
+                <label htmlFor="f-in">Browse</label>
+              </Button>
+            </div>
+
+            {/* File entry cards */}
+            <div className="space-y-3">
+              {fileEntries.map((entry) => {
+                const missingField = getMissingField(entry)
+                return (
+                  <div
+                    key={entry.id}
+                    className={`p-4 border rounded-xl bg-white shadow-sm transition-colors ${
+                      missingField ? "border-amber-300" : "hover:border-blue-200"
+                    }`}
+                  >
+                    <div className="flex justify-between mb-3 items-center">
+                      <div className="flex items-center gap-3">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <span className="text-sm font-bold truncate max-w-[200px]">{entry.file.name}</span>
+                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight uppercase">
+                          {entry.studentCount} Students
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setFileEntries((prev) => prev.filter((f) => f.id !== entry.id))}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                      <select
+                        className="h-9 border rounded-md text-[11px] px-2"
+                        value={entry.batch}
+                        onChange={(e) => updateTag(entry.id, "batch", e.target.value)}
+                      >
+                        <option value="KTU">KTU</option>
+                        <option value="Autonomous">Autonomous</option>
+                      </select>
+
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 ${!entry.semester ? "border-amber-400" : ""}`}
+                        value={entry.semester}
+                        onChange={(e) => updateTag(entry.id, "semester", e.target.value)}
+                      >
+                        <option value="">Sem</option>
+                        {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 ${!entry.dept ? "border-amber-400" : ""}`}
+                        value={entry.dept}
+                        onChange={(e) => updateTag(entry.id, "dept", e.target.value)}
+                      >
+                        <option value="">Branch</option>
+                        {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
+
+                      <select
+                        className="h-9 border rounded-md text-[11px] px-2"
+                        value={entry.division}
+                        onChange={(e) => updateTag(entry.id, "division", e.target.value)}
+                      >
+                        <option value="NA">NA</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="Mixed">Mixed</option>
+                      </select>
+
+                      <select
+                        className={`h-9 border rounded-md text-[11px] px-2 font-medium ${!entry.subjectCode ? "border-amber-400" : ""}`}
+                        value={entry.subjectName}
+                        onChange={(e) => updateTag(entry.id, "subjectName", e.target.value)}
+                        disabled={!entry.semester || !entry.dept}
+                      >
+                        <option value="">
+                          {!entry.semester || !entry.dept
+                            ? "Select sem & branch first"
+                            : getSubjectsFor(entry.semester, entry.dept).length === 0
+                            ? "No subjects found"
+                            : "Subject"}
+                        </option>
+                        {getSubjectsFor(entry.semester, entry.dept).map((s) => (
+                          <option key={s.course_code} value={s.course_name}>
+                            {s.course_name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <Input
+                        value={entry.subjectCode}
+                        readOnly
+                        placeholder="Code"
+                        className="h-9 text-[11px] bg-slate-50 font-bold"
+                      />
+                    </div>
+
+                    {/* FIX #5 — inline validation message per card */}
+                    {missingField && (
+                      <p className="mt-2 text-[10px] text-amber-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Please select a {missingField}
+                      </p>
+                    )}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => removeFile(entry.id)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          /* ---- Syllabus manager ---- */
+          <div className="space-y-4">
+            <p className="text-sm font-bold px-1">Manage Syllabus</p>
+            {SEMESTERS.map((sem) => (
+              <div key={sem} className="border rounded-lg overflow-hidden">
+                <div
+                  className="bg-slate-50 p-3 flex justify-between cursor-pointer hover:bg-slate-100"
+                  onClick={() => setExpandedSem(expandedSem === sem ? null : sem)}
+                >
+                  <span className="text-xs font-bold">{sem} Courses</span>
+                  <ChevronDown className="w-4 h-4" />
                 </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:ring-2 focus:ring-blue-600 outline-none"
-                    value={entry.batch} 
-                    onChange={e => updateTag(entry.id, "batch", e.target.value)}
-                  >
-                    <option value="">Select Batch</option>
-                    <option value="autonomous">Autonomous</option>
-                    <option value="ktu">KTU</option>
-                  </select>
 
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-blue-600 outline-none"
-                    value={entry.semester} 
-                    onChange={e => updateTag(entry.id, "semester", e.target.value)}
-                    disabled={!entry.batch}
-                  >
-                    <option value="">Select Semester</option>
-                    {SEMESTERS.map(s => <option key={s} value={s}>Semester {s.slice(1)}</option>)}
-                  </select>
+                {expandedSem === sem && (
+                  <div className="p-3 space-y-4 bg-white animate-in slide-in-from-top-2">
+                    {[...departments, "All"].map((dept) => {
+                      // FIX #1 — isolated form state per semester+dept
+                      const key = `${sem}__${dept}`
+                      const form = addForms[key] ?? { name: "", code: "" }
 
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-blue-600 outline-none"
-                    value={entry.dept} 
-                    onChange={e => updateTag(entry.id, "dept", e.target.value)}
-                    disabled={!entry.batch || !entry.semester}
-                  >
-                    <option value="">Select Branch / Department</option>
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                      return (
+                        <div
+                          key={dept}
+                          className="border-l-4 border-blue-500 pl-4 py-2 bg-slate-50/50 rounded-r-lg"
+                        >
+                          <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">
+                            {dept}
+                          </p>
 
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-blue-600 outline-none md:col-span-2"
-                    value={entry.subjectName} 
-                    onChange={e => updateTag(entry.id, "subjectName", e.target.value)}
-                    disabled={!entry.batch || !entry.semester || !entry.dept || !availableSubjects.length}
-                  >
-                    <option value="">Select Subject</option>
-                    {availableSubjects.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                  </select>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                            {(syllabus[sem]?.[dept] ?? []).map((s) => (
+                              <div
+                                key={s.course_code}
+                                className="flex items-center justify-between bg-white p-2 rounded-md border shadow-sm text-[10px]"
+                              >
+                                <span className="font-bold">
+                                  {s.course_name}{" "}
+                                  <span className="text-slate-400">({s.course_code})</span>
+                                </span>
+                                {/* FIX #2 — confirmation built into handleDelete */}
+                                <Trash2
+                                  className="w-3 h-3 text-destructive cursor-pointer hover:scale-125 transition-transform"
+                                  onClick={() => handleDelete(s.course_code, s.course_name)}
+                                />
+                              </div>
+                            ))}
 
-                  <Input placeholder="Course Code" value={entry.subjectCode} readOnly className="bg-slate-100" />
-                  <Input placeholder="Division (e.g. A, B)" value={entry.division} onChange={e => updateTag(entry.id, "division", e.target.value)} />
-                </div>
+                            {(syllabus[sem]?.[dept] ?? []).length === 0 && (
+                              <p className="text-[10px] text-slate-400 col-span-2">No subjects yet</p>
+                            )}
+                          </div>
+
+                          {/* FIX #1 — each row has its own isolated inputs */}
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Subject Name"
+                              className="h-8 text-[11px]"
+                              value={form.name}
+                              onChange={(e) =>
+                                setAddForms((prev) => ({
+                                  ...prev,
+                                  [key]: { ...form, name: e.target.value },
+                                }))
+                              }
+                            />
+                            <Input
+                              placeholder="Code"
+                              className="h-8 text-[11px] w-32"
+                              value={form.code}
+                              onChange={(e) =>
+                                setAddForms((prev) => ({
+                                  ...prev,
+                                  [key]: { ...form, code: e.target.value },
+                                }))
+                              }
+                            />
+                            <Button
+                              size="sm"
+                              className="h-8 px-4"
+                              disabled={!form.name.trim() || !form.code.trim()}
+                              onClick={() => handleAdd(sem, dept)}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
 
-        <div className="flex justify-between pt-4 border-t">
-          <Button variant="outline" onClick={onBack}>
+        {/* Footer */}
+        <div className="flex justify-between pt-6 border-t mt-4">
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="h-10 px-6 font-black uppercase text-[10px] tracking-[0.2em]"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <Button 
-            disabled={fileEntries.length === 0 || fileEntries.some(e => !e.subjectCode)} 
-            onClick={() => onUpload({ type: "internal", data: fileEntries })}
-          >
-            Preview Data
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+
+          {/* FIX #5 — tooltip on disabled state so users know why it's grayed */}
+          <div className="relative group">
+            <Button
+              disabled={!allValid}
+              onClick={() =>
+                onUpload({
+                  type: "internal",
+                  data: fileEntries.map((e) => ({
+                    file: e.file,
+                    tags: {
+                      file_name: e.file.name,
+                      batch: e.batch,
+                      semester: e.semester,
+                      department: e.dept,
+                      course_code: e.subjectCode,
+                      division: e.division,
+                      student_count: e.studentCount,
+                      startRow: e.startRow,
+                      endRow: e.endRow,
+                    },
+                  })),
+                })
+              }
+              className="bg-blue-700 hover:bg-blue-800 text-white font-black h-10 px-8 text-[10px] tracking-widest uppercase"
+            >
+              Preview Data <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            {!allValid && fileEntries.length > 0 && (
+              <div className="absolute bottom-full right-0 mb-2 w-52 rounded-md bg-slate-800 px-3 py-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Complete all highlighted fields before continuing
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
