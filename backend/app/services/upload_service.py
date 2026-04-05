@@ -140,7 +140,7 @@ class UploadService:
         }
 
         column_map = {
-            "student":     vice.get_column_name(normalized_columns, ["student", "name"]),
+            "student":     UploadService.get_column_name(normalized_columns, ["student", "name"]),
             "reg_no":      UploadService.get_column_name(normalized_columns, ["reg_no", "register_no", "registration_no"]),
             "branch_name": UploadService.get_column_name(normalized_columns, ["branch_name", "branch"]),
             "course":      UploadService.get_column_name(normalized_columns, ["course", "course_name"]),
@@ -275,15 +275,15 @@ class UploadService:
                 "column": int(col_value) if not pd.isna(col_value) else None,
             }
 
-            print("ENTRY:", entry)  # 🔥
+            print("ENTRY:", entry)  
 
             if entry["room_number"] and entry["row"] and entry["column"]:
                 valid.append(entry)
             else:
                 skipped.append(entry)
 
-        print("VALID:", valid)      # 🔥
-        print("SKIPPED:", skipped)  # 🔥
+        print("VALID:", valid)     
+        print("SKIPPED:", skipped) 
 
         return valid, skipped
 
@@ -421,48 +421,65 @@ class UploadService:
         }
     @staticmethod
     async def process_room_upload(file: UploadFile, db: Session):
-        content = await file.read()
-
-        import pandas as pd
         from io import BytesIO
+        import pandas as pd
 
+        # Read file
+        content = await file.read()
         df = pd.read_csv(BytesIO(content))
 
-        print("CSV DATA:\n", df.head())  # 🔥 debug
-
-        if not {"room_number", "rows", "cols"}.issubset(df.columns):
-            raise HTTPException(status_code=400, detail="Invalid CSV format")
+        # Validate columns
+        required_columns = {"room_number", "rows", "cols"}
+        if not required_columns.issubset(df.columns):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid CSV format. Required columns: {required_columns}"
+            )
 
         inserted = 0
         skipped = []
 
-        for _, row in df.iterrows():
+        #  Fetch all existing rooms ONCE (fixes 30 sec delay)
+        existing_rooms = {
+            r.room_number: r
+            for r in db.query(Room).all()
+        }
+
+        new_rooms = []
+
+        #  Faster than iterrows()
+        for row in df.to_dict(orient="records"):
             try:
-                entry = {   # ✅ ALWAYS DEFINE FIRST
-                    "room_number": str(row["room_number"]).strip(),
-                    "rows": int(row["rows"]),
-                    "cols": int(row["cols"])
-                }
+                room_number = str(row["room_number"]).strip()
+                rows = int(row["rows"])
+                cols = int(row["cols"])
 
-                existing = db.query(Room).filter(
-                    Room.room_number == entry["room_number"]
-                ).first()
+                # Skip invalid
+                if not room_number or rows <= 0 or cols <= 0:
+                    skipped.append({"row": row, "reason": "Invalid data"})
+                    continue
 
-                if not existing:
-                    new_room = Room(
-                        room_number=entry["room_number"],
-                        rows=entry["rows"],
-                        cols=entry["cols"]
+                # Avoid duplicates
+                if room_number not in existing_rooms:
+                    new_rooms.append(
+                        Room(
+                            room_number=room_number,
+                            rows=rows,
+                            cols=cols
+                        )
                     )
-                    db.add(new_room)
-                    inserted += 1
 
             except Exception as e:
-                skipped.append({"error": str(e)})
+                skipped.append({"row": row, "error": str(e)})
 
-        db.commit()
+        # Bulk insert (FAST)
+        if new_rooms:
+            db.add_all(new_rooms)
+            db.commit()
+            inserted = len(new_rooms)
 
         return {
+            "message": "Room upload successful",
             "inserted": inserted,
             "skipped": len(skipped)
         }

@@ -125,44 +125,60 @@ def create_room(room_data: RoomCreate, db: Session = Depends(get_db)):
         )
 
 
-# ✏️ UPDATE ROOM
 @router.put("/rooms/{room_id}")
 def update_room(room_id: int, updated_data: dict, db: Session = Depends(get_db)):
+    room = db.query(Room).filter(Room.id == room_id).first()
+
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # ✅ Prevent duplicate room_number
+    if "room_number" in updated_data:
+        duplicate = db.query(Room).filter(
+            Room.room_number == updated_data["room_number"],
+            Room.id != room_id
+        ).first()
+
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Room number already exists")
+
+        room.room_number = updated_data["room_number"]
+
+    if "rows" in updated_data:
+        room.rows = updated_data["rows"]
+
+    if "columns" in updated_data:
+        room.cols = updated_data["columns"]
+
+    db.commit()
+    db.refresh(room)
+
+    return {"message": "Room updated successfully"}
+
+from typing import List
+from pydantic import BaseModel
+
+class RoomBulkUpdateItem(BaseModel):
+    id: int
+    rows: int
+    cols: int
+
+class RoomBulkUpdateRequest(BaseModel):
+    rooms: List[RoomBulkUpdateItem]
+
+@router.patch("/rooms/bulk-update")
+def bulk_update_rooms(payload: RoomBulkUpdateRequest, db: Session = Depends(get_db)):
     try:
-        room = db.query(Room).filter(Room.id == room_id).first()
-
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
-
-        if "roomId" in updated_data:
-            room.room_number = updated_data["roomId"]
-
-        if "rows" in updated_data:
-            room.rows = updated_data["rows"]
-
-        if "columns" in updated_data:
-            room.cols = updated_data["columns"]
-
+        for item in payload.rooms:
+            room = db.query(Room).filter(Room.id == item.id).first()
+            if not room:
+                raise HTTPException(status_code=404, detail=f"Room {item.id} not found")
+            room.rows = item.rows
+            room.cols = item.cols
         db.commit()
-        db.refresh(room)
-
-        return {
-            "success": True,
-            "message": "Room updated successfully.",
-            "data": {
-                "id": room.id,
-                "room_number": room.room_number,
-                "rows": room.rows,
-                "cols": room.cols,
-            },
-        }
-    except HTTPException as e:
-        return JSONResponse(
-            status_code=e.status_code,
-            content={"success": False, "message": str(e.detail)},
-        )
+        return {"success": True, "message": f"Updated {len(payload.rooms)} rooms."}
+    except HTTPException:
+        raise
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"Failed to update room: {str(e)}"},
-        )
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

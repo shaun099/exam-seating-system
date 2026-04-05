@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.models.allocation import Allocation
-from app.models.seat_allocation import SeatAllocation
 from app.db.database import get_db
 from app.models.exam import Exam
 from app.services.allocation_service import AllocationService
@@ -19,7 +18,7 @@ def allocate_students(
     db: Session = Depends(get_db)
 ):
     try:
-        result = AllocationService.allocate(data.slot, data.rows, data.cols, db)
+        result = AllocationService.allocate(data.slot,data.sem, data.rows, data.cols, db)
 
         if not isinstance(result, dict):
             return JSONResponse(
@@ -45,7 +44,8 @@ def allocate_students(
                 "message": str(exc.detail),
             },
         )
-    except Exception:
+    except Exception as e:
+        print(f"ALLOCATION ERROR: {e}") 
         return JSONResponse(
             status_code=500,
             content={
@@ -54,19 +54,11 @@ def allocate_students(
             },
         )
 def _build_allocated_slots_summary(db: Session):
-    """
-    Returns unique event_name + slot pairs that have seats allocated.
-    """
     try:
         rows = (
-            db.query(
-                Allocation.slot,
-                Exam.event_name,
-                Exam.date,
-                Exam.session,
-            )
+            db.query(Allocation.slot, Allocation.semester, Exam.event_name, Exam.date)
             .join(Exam, Allocation.exam_id == Exam.id)
-            .join(SeatAllocation, SeatAllocation.allocation_id == Allocation.id)
+            .distinct()
             .all()
         )
 
@@ -74,19 +66,17 @@ def _build_allocated_slots_summary(db: Session):
         unique = []
 
         for row in rows:
-            key = f"{row.event_name}__{row.slot}"
+            key = f"{row.semester}__{row.slot}"
             if key in seen:
                 continue
 
             seen.add(key)
-            unique.append(
-                {
-                    "event_name": row.event_name,
-                    "slot": row.slot,
-                    "date": row.date,
-                    "session": row.session,
-                }
-            )
+            unique.append({
+                "event_name": row.event_name,
+                "slot": row.slot,
+                "semester": row.semester,
+                "date": row.date,
+            })
 
         return {"data": unique}
     except Exception as e:
@@ -96,3 +86,4 @@ def _build_allocated_slots_summary(db: Session):
 @seat_allocations_router.get("/slots-summary")
 def get_allocated_slots_summary(db: Session = Depends(get_db)):
     return _build_allocated_slots_summary(db)
+
