@@ -5,7 +5,7 @@ import { LoginForm } from "./Auth/login";
 import { SeatingAllocation } from "./component/pages/seating_allocation";
 import { Configurations } from "./component/pages/configuration";
 import Reports from "./component/pages/Report";
-import EmailNotifications from "./component/pages/email-notifications";
+import SiteActivation from "./component/pages/site-activation";
 import Dashboard from "./component/pages/Dashboard";
 import { ExamSessionWizard } from "./component/pages/ExamSession/ExamSessionWizard";
 import  RoomConfig  from "./component/pages/room-config";
@@ -47,7 +47,7 @@ const breadcrumbMap: Record<string, { label: string; href?: string }[]> = {
     { label: "Class Matrix Preview" },
   ],  
 
-  email: [{ label: "Home", href: "/" }, { label: "Email Notifications" }],
+  "site-activation": [{ label: "Home", href: "/" }, { label: "Site Activation" }],
 };
 
 function App() {
@@ -124,8 +124,8 @@ function App() {
           />
         );
 
-      case "email":
-        return <EmailNotifications />;
+      case "site-activation":
+        return <SiteActivation />;
 
       case "room-config":
         return <RoomConfig />;

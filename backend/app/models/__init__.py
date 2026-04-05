@@ -6,3 +6,4 @@ from .branch import *
 from .room import *
 from .allocation import *
 from .seat_allocation import *
+from .site_activation import *
