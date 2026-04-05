@@ -121,13 +121,20 @@ export function DataImportInternal({
     setIsLoading(true)
     setFetchError(null)
     try {
-      const res = await fetch("http://localhost:8000/api/v1/exams/subjects")
-      if (!res.ok) throw new Error(`Server returned ${res.status}`)
-      const data: any[] = await res.json()
+      const [subjectsRes, departmentsRes] = await Promise.all([
+        fetch("http://localhost:8000/api/v1/exams/subjects?batch=KTU"),
+        fetch("http://localhost:8000/api/v1/exams/departments?batch=KTU"),
+      ])
 
-      // FIX #6 — deduplicate departments from backend
+      if (!subjectsRes.ok) throw new Error(`Server returned ${subjectsRes.status}`)
+      const data: any[] = await subjectsRes.json()
+
+      const departmentsData: any[] = departmentsRes.ok ? await departmentsRes.json() : []
       const uniqueDepts = Array.from(
-        new Set(data.map((s) => (s.department ?? "").trim()).filter(Boolean))
+        new Set([
+          ...departmentsData.map((d) => (d.name ?? "").trim()),
+          ...data.map((s) => (s.department ?? "").trim()),
+        ].filter(Boolean))
       ) as string[]
       setDepartments(uniqueDepts)
 
@@ -203,7 +210,7 @@ export function DataImportInternal({
     if (!window.confirm(`Delete "${courseName}" (${courseCode})?`)) return
 
     const res = await fetch(
-      `http://localhost:8000/api/v1/exams/subjects/${courseCode}`,
+      `http://localhost:8000/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=KTU`,
       { method: "DELETE" }
     )
     // FIX #10 — server now returns 404 for missing codes; surface it here

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card"
 import { Button } from "../../ui/button"
 import { Upload, FileSpreadsheet, ArrowLeft, ArrowRight, Trash2, AlertCircle, Settings, Plus, X } from "lucide-react"
@@ -20,6 +20,7 @@ const INITIAL_DEPARTMENTS: string[] = [
 ];
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map((semester) => `S${semester}`)
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")
 
 const INITIAL_SYLLABUS: Record<string, Record<string, { name: string; code: string }[]>> = {
   "S1": {
@@ -321,6 +322,8 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
   // --- DYNAMIC DATA MANAGEMENT ---
   const [departments, setDepartments] = useState<string[]>(INITIAL_DEPARTMENTS)
   const [syllabus, setSyllabus] = useState(INITIAL_SYLLABUS)
+  const [isLoading, setIsLoading] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [isManaging, setIsManaging] = useState(false)
   
   // Management Temp States
@@ -329,6 +332,66 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
   const [mgmtDept, setMgmtDept] = useState(INITIAL_DEPARTMENTS[0])
   const [newSubName, setNewSubName] = useState("")
   const [newSubCode, setNewSubCode] = useState("")
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setFetchError(null)
+    try {
+      const [subjectsRes, departmentsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/exams/subjects?batch=Autonomous`),
+        fetch(`${API_BASE}/api/v1/exams/departments?batch=Autonomous`),
+      ])
+
+      if (!subjectsRes.ok) {
+        throw new Error(`Could not load subjects (${subjectsRes.status})`)
+      }
+
+      const subjectsData: Array<{
+        semester: string
+        department: string
+        course_name: string
+        course_code: string
+      }> = await subjectsRes.json()
+      const departmentsData: Array<{ name: string }> = departmentsRes.ok ? await departmentsRes.json() : []
+
+      const grouped = subjectsData.reduce<Record<string, Record<string, { name: string; code: string }[]>>>(
+        (acc, item) => {
+          const semester = (item.semester || "").trim().toUpperCase()
+          const department = (item.department || "").trim()
+          if (!semester || !department) return acc
+          if (!acc[semester]) acc[semester] = {}
+          if (!acc[semester][department]) acc[semester][department] = []
+          acc[semester][department].push({
+            name: item.course_name,
+            code: item.course_code,
+          })
+          return acc
+        },
+        {}
+      )
+
+      const deptNames = Array.from(
+        new Set([
+          ...departmentsData.map((d) => (d.name || "").trim()),
+          ...subjectsData.map((s) => (s.department || "").trim()),
+        ].filter(Boolean))
+      )
+
+      setSyllabus(Object.keys(grouped).length ? grouped : INITIAL_SYLLABUS)
+      setDepartments(deptNames.length ? deptNames : INITIAL_DEPARTMENTS)
+      if (!deptNames.includes(mgmtDept)) {
+        setMgmtDept(deptNames[0] || INITIAL_DEPARTMENTS[0])
+      }
+    } catch (error: any) {
+      setFetchError(error?.message || "Could not load subjects/departments")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [mgmtDept])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const processFiles = (files: File[]) => {
     const newEntries: AutoFileEntry[] = files.map(f => ({
@@ -382,23 +445,76 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
   };
 
   // --- MANAGEMENT LOGIC ---
-  const addDept = () => {
-    if (newDeptName && !departments.includes(newDeptName)) {
-      setDepartments([...departments, newDeptName]); setNewDeptName("");
-    }
-  }
-  const deleteDept = (name: string) => setDepartments(departments.filter(d => d !== name))
+  const addDept = async () => {
+    const name = newDeptName.trim()
+    if (!name) return
 
-  const addSubject = () => {
-    if (!newSubName || !newSubCode) return;
-    setSyllabus(prev => ({
-      ...prev,
-      [mgmtSem]: {
-        ...prev[mgmtSem],
-        [mgmtDept]: [...(prev[mgmtSem]?.[mgmtDept] || []), { name: newSubName, code: newSubCode }]
-      }
-    }));
-    setNewSubName(""); setNewSubCode("");
+    const res = await fetch(`${API_BASE}/api/v1/exams/departments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, batch: "Autonomous" }),
+    })
+
+    if (!res.ok && res.status !== 409) {
+      alert("Could not create department")
+      return
+    }
+
+    setNewDeptName("")
+    await loadData()
+  }
+
+  const deleteDept = async (name: string) => {
+    if (!window.confirm(`Delete branch \"${name}\" and related subjects?`)) return
+
+    const res = await fetch(`${API_BASE}/api/v1/exams/departments/${encodeURIComponent(name)}?batch=Autonomous`, {
+      method: "DELETE",
+    })
+    if (!res.ok) {
+      alert("Could not delete department")
+      return
+    }
+
+    setFileEntries((prev) => prev.map((entry) => entry.dept === name ? { ...entry, dept: "", subjectName: "", subjectCode: "" } : entry))
+    await loadData()
+  }
+
+  const addSubject = async () => {
+    const courseName = newSubName.trim()
+    const courseCode = newSubCode.trim().toUpperCase()
+    if (!courseName || !courseCode || !mgmtDept) return
+
+    const res = await fetch(`${API_BASE}/api/v1/exams/subjects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        semester: mgmtSem,
+        department: mgmtDept,
+        batch: "Autonomous",
+        course_name: courseName,
+        course_code: courseCode,
+      }),
+    })
+
+    if (!res.ok && res.status !== 409) {
+      alert("Could not add subject")
+      return
+    }
+
+    setNewSubName("")
+    setNewSubCode("")
+    await loadData()
+  }
+
+  const deleteSubject = async (courseCode: string) => {
+    const res = await fetch(`${API_BASE}/api/v1/exams/subjects/${encodeURIComponent(courseCode)}?batch=Autonomous`, {
+      method: "DELETE",
+    })
+    if (!res.ok) {
+      alert("Could not delete subject")
+      return
+    }
+    await loadData()
   }
 
   const handleContinue = () => {
@@ -421,6 +537,16 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
       </CardHeader>
 
       <CardContent className="space-y-6 pt-6">
+        {fetchError && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+            {fetchError}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="text-sm text-muted-foreground">Loading subjects and departments...</div>
+        )}
+
         {isManaging ? (
           <div className="space-y-6 border p-4 rounded-lg bg-slate-50/50">
             <div className="space-y-4">
@@ -457,12 +583,7 @@ export function DataImportAutonomous({ onUpload, onBack }: { onUpload: (data: an
                 {(syllabus[mgmtSem]?.[mgmtDept] || []).map((s, idx) => (
                   <div key={idx} className="flex justify-between items-center text-xs bg-white p-2 border rounded">
                     <span className="font-bold">{s.name} ({s.code})</span>
-                    <Trash2 className="w-3 h-3 text-destructive cursor-pointer" onClick={() => {
-                        setSyllabus(prev => ({
-                          ...prev,
-                          [mgmtSem]: { ...prev[mgmtSem], [mgmtDept]: prev[mgmtSem][mgmtDept].filter((_, i) => i !== idx)}
-                        }))
-                    }} />
+                    <Trash2 className="w-3 h-3 text-destructive cursor-pointer" onClick={() => deleteSubject(s.code)} />
                   </div>
                 ))}
               </div>

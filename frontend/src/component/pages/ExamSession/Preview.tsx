@@ -10,7 +10,7 @@ interface PreviewProps {
   payload: any
   onBack: () => void
   onCancel: () => void
-  onGenerate: () => void
+  onGenerate: (files: File[], tags?: any) => void
 }
 
 const PAGE_SIZE = 10
@@ -250,7 +250,13 @@ export default function Preview({ payload, onBack, onCancel, onGenerate }: Previ
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onCancel}>Cancel</Button>
-            <Button onClick={onGenerate} disabled={allRows.length === 0}>
+            <Button
+              onClick={() => {
+                const files = payload?.files || payload?.data?.map((item: any) => item.file) || []
+                onGenerate(files, payload?.tags)
+              }}
+              disabled={allRows.length === 0}
+            >
               Generate Seating <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
