@@ -9,8 +9,14 @@ import {
 } from "../ui/dialog";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Button } from "../ui/button";
-import { Upload, Play, FileText, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-
+import {
+  Upload,
+  Play,
+  FileText,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 
 type AllocationStatus = "idle" | "loading" | "success" | "error";
 
@@ -32,6 +38,7 @@ interface RoomConfigurationModalProps {
   onAllocate: () => void;
   onGeneratePdf: () => void;
   onRetry: () => void;
+  onNavigate?: (page: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +92,7 @@ export function RoomConfigurationModal({
   onAllocate,
   onGeneratePdf,
   onRetry,
+  onNavigate,
 }: RoomConfigurationModalProps) {
   const isLoading = allocationStatus === "loading";
   const isDone = allocationStatus === "success" || allocationStatus === "error";
@@ -168,9 +176,13 @@ export function RoomConfigurationModal({
                       size="sm"
                       className="mt-3 bg-transparent"
                       type="button"
+                      onClick={() => {
+                        onNavigate?.("room-config");
+                        onClose();
+                      }}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      Upload Room CSV
+                      Go to Room Configuration
                     </Button>
                   )}
                 </div>
