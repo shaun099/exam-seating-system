@@ -20,33 +20,87 @@ export function ExamSessionWizard({
   const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [uploadPayload, setUploadPayload] = useState<any>(null);
 
+  // const uploadStudentsFiles = async (files: File[]) => {
+  //   const apiBase = (
+  //     import.meta.env.VITE_API_URL || "http://localhost:8000"
+  //   ).replace(/\/$/, "");
+
+  //   for (const file of files) {
+  //     const formData = new FormData();
+  //     formData.append("file", file);
+
+  //     const response = await fetch(`${apiBase}/api/v1/upload/students`, {
+  //       method: "POST",
+  //       body: formData,
+  //     });
+
+  //     if (!response.ok) {
+  //       let message = `Failed to upload ${file.name}`;
+  //       try {
+  //         const data = await response.json();
+  //         message = data?.message || message;
+  //       } catch {
+  //         // keep default message when response body is not JSON
+  //       }
+  //       throw new Error(message);
+  //     }
+  //   }
+  // };
+
   const uploadStudentsFiles = async (files: File[]) => {
     const apiBase = (
       import.meta.env.VITE_API_URL || "http://localhost:8000"
     ).replace(/\/$/, "");
 
+    const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB per chunk — well under 30s
+
     for (const file of files) {
-      const formData = new FormData();
-      formData.append("file", file);
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const uploadId = crypto.randomUUID();
+      let finalResult = null;
 
-      const response = await fetch(`${apiBase}/api/v1/upload/students`, {
-        method: "POST",
-        body: formData,
-      });
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
 
-      if (!response.ok) {
-        let message = `Failed to upload ${file.name}`;
-        try {
-          const data = await response.json();
-          message = data?.message || message;
-        } catch {
-          // keep default message when response body is not JSON
+        const formData = new FormData();
+        formData.append("chunk", chunk);
+        formData.append("upload_id", uploadId);
+        formData.append("chunk_index", String(i));
+        formData.append("total_chunks", String(totalChunks));
+        formData.append("filename", file.name); // so backend knows the extension
+
+        const response = await fetch(
+          `${apiBase}/api/v1/upload/students/chunk`,
+          {
+            method: "POST",
+            body: formData,
+          },
+        );
+
+        if (!response.ok) {
+          let message = `Failed to upload ${file.name}`;
+          try {
+            const data = await response.json();
+            message = data?.message || message;
+          } catch {
+            // Keep default message when response body is not JSON.
+          }
+          throw new Error(message);
         }
-        throw new Error(message);
+
+        const data = await response.json();
+
+        // Last chunk triggers processing — capture result
+        if (data.status === "complete") {
+          finalResult = data;
+        }
       }
+
+      return finalResult;
     }
   };
-
   return (
     <div className="container mx-auto py-8 max-w-4xl">
       {step === "details" && (
