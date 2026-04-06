@@ -72,6 +72,7 @@ export function SeatingAllocation({
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [roomOption, setRoomOption] = useState<string>("default");
   const [allocationStatus, setAllocationStatus] =
     useState<AllocationStatus>("idle");
   const [allocationError, setAllocationError] = useState<string | null>(null);
@@ -250,6 +251,7 @@ export function SeatingAllocation({
    */
   const closeModal = () => {
     setSelectedSlot(null);
+    setRoomOption("default");
     setAllocationStatus("idle");
     setAllocationError(null);
     isAllocating.current = false;
@@ -380,15 +382,16 @@ export function SeatingAllocation({
         selectedSlot={selectedSlot}
         allocationStatus={allocationStatus}
         allocationError={allocationError}
-        roomOption="default"
+        roomOption={roomOption}
         onClose={closeModal}
         onAllocate={handleAllocate}
-        onRoomOptionChange={() => {}}
+        onRoomOptionChange={setRoomOption}
         onGeneratePdf={() => {
           closeModal();
           onNavigate?.("reports");
         }}
         onRetry={closeModal}
+        onNavigate={onNavigate}
       />
     </div>
   );
