@@ -17,7 +17,7 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Admin client for bypass operations (Service Role Key)
-supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+# supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 def get_current_user(authorization: str = Header(...)):
     try:

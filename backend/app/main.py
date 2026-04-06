@@ -17,7 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 import app.models
+from app.models.site_activation import SiteActivation
 from app.models import (
+    AllocationExam,
     SeatAllocation,
     Seating,
     Allocation,
@@ -50,6 +52,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(admin.router)
 Base.metadata.drop_all(bind=engine, tables=[
+    AllocationExam.__table__,
     SeatAllocation.__table__,
     Seating.__table__,
     Allocation.__table__,

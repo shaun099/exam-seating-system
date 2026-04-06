@@ -131,7 +131,8 @@ export const fetchAllocatedSlots = async (
     }
 
     if (!res.ok) {
-      throw new Error(ERROR_MESSAGES.ALLOCATION_STATUS_FETCH_FAILED);
+      // Degrade gracefully: if status fetch fails, treat all slots as pending.
+      return [];
     }
 
     const data = await res.json();
@@ -140,9 +141,8 @@ export const fetchAllocatedSlots = async (
     if (err instanceof Error && err.message === "UNAUTHORIZED") {
       throw err;
     }
-    throw new Error(
-      formatErrorMessage(err, ERROR_MESSAGES.ALLOCATION_STATUS_FETCH_FAILED),
-    );
+    // Do not block seating page when allocation summary endpoint is down.
+    return [];
   }
 };
 

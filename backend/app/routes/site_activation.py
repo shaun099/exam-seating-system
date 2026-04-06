@@ -1,19 +1,79 @@
 from datetime import date as date_type, datetime
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.allocation import Allocation
+from app.models.allocation import Allocation, AllocationExam
 from app.models.course import Course
 from app.models.exam import Exam
 from app.models.room import Room
+from app.models.seating import Seating
 from app.models.seat_allocation import SeatAllocation
 from app.models.site_activation import SiteActivation
 from app.models.student import Student
 from app.schemas.site_activation import SiteActivationCreate, SiteActivationResponse
 
 router = APIRouter(prefix="/site-activation", tags=["Site Activation"])
+
+
+def _collapse_event_names(event_names: list[str]) -> str:
+    unique = [name for name in dict.fromkeys(event_names) if name]
+    if not unique:
+        return ""
+
+    regular = next((name for name in unique if "(R)" in name), None)
+    supply = next((name for name in unique if "(S)" in name), None)
+
+    if regular and supply:
+        return re.sub(r"\((R|S)\)", "(R/S)", regular, count=1)
+    return regular or supply or unique[0]
+
+
+def _get_preferred_exam_for_allocation(allocation_id: int, db: Session):
+    return (
+        db.query(Exam)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .filter(AllocationExam.allocation_id == allocation_id)
+        .order_by(
+            # Prefer regular exam title when both regular/supply exist.
+            Exam.event_name.contains("(R)").desc(),
+            Exam.id.asc(),
+        )
+        .first()
+    )
+
+
+def _get_exams_for_allocation(allocation_id: int, db: Session) -> list[Exam]:
+    return (
+        db.query(Exam)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .filter(AllocationExam.allocation_id == allocation_id)
+        .order_by(Exam.event_name.contains("(R)").desc(), Exam.id.asc())
+        .all()
+    )
+
+
+def _get_student_exam_for_allocation(
+    student_id: int,
+    course_id: int,
+    allocation: Allocation,
+    db: Session,
+):
+    return (
+        db.query(Exam)
+        .join(Seating, Seating.exam_id == Exam.id)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .filter(
+            Seating.student_id == student_id,
+            Seating.course_id == course_id,
+            Seating.slot == allocation.slot,
+            AllocationExam.allocation_id == allocation.id,
+        )
+        .order_by(Exam.event_name.contains("(R)").desc(), Exam.id.asc())
+        .first()
+    )
 
 
 # ── POST / ────────────────────────────────────────────────────────────────────
@@ -36,11 +96,12 @@ def save_activation_window(payload: SiteActivationCreate, db: Session = Depends(
             detail=f"No allocation found for sem='{normalized_sem}' slot='{normalized_slot}'.",
         )
 
-    exam = db.query(Exam).filter(Exam.id == allocation.exam_id).first()
-    if not exam:
+    exams = _get_exams_for_allocation(allocation.id, db)
+    if not exams:
         raise HTTPException(status_code=404, detail="No exam found for this allocation.")
 
-    session_value = exam.session
+    merged_event_name = _collapse_event_names([exam.event_name for exam in exams])
+    session_value = exams[0].session
 
     existing = (
         db.query(SiteActivation)
@@ -56,7 +117,7 @@ def save_activation_window(payload: SiteActivationCreate, db: Session = Depends(
         existing.start_time    = payload.start_time
         existing.end_time      = payload.end_time
         existing.time_gap      = payload.time_gap
-        existing.event_name    = payload.event_name
+        existing.event_name    = merged_event_name
         existing.session       = session_value
         existing.status        = payload.status or "scheduled"
         db.commit()
@@ -71,7 +132,7 @@ def save_activation_window(payload: SiteActivationCreate, db: Session = Depends(
         start_time    = payload.start_time,
         end_time      = payload.end_time,
         time_gap      = payload.time_gap,
-        event_name    = payload.event_name,
+        event_name    = merged_event_name,
         session       = session_value,
         status        = payload.status or "scheduled",
     )
@@ -102,22 +163,40 @@ def get_slots_summary(db: Session = Depends(get_db)):
             Exam.date,
             Exam.session,
         )
-        .join(Allocation, Allocation.exam_id == Exam.id)
+        .join(AllocationExam, AllocationExam.exam_id == Exam.id)
+        .join(Allocation, Allocation.id == AllocationExam.allocation_id)
         .join(SeatAllocation, SeatAllocation.allocation_id == Allocation.id)
-        .distinct()
-        .order_by(Exam.event_name, Allocation.slot)
+        .order_by(Allocation.semester.asc(), Allocation.slot.asc(), Exam.id.asc())
         .all()
     )
+
+    grouped = {}
+    for row in results:
+        key = (row.semester, row.slot)
+        if key not in grouped:
+            grouped[key] = {
+                "slot": row.slot,
+                "sem": row.semester,
+                "date": row.date,
+                "session": row.session,
+                "event_names": [],
+                "_seen": set(),
+            }
+        if row.event_name not in grouped[key]["_seen"]:
+            grouped[key]["_seen"].add(row.event_name)
+            grouped[key]["event_names"].append(row.event_name)
+
     return {
         "data": [
             {
-                "event_name": row.event_name,
-                "slot":       row.slot,
-                "sem":        row.semester,
-                "date":       str(row.date) if row.date else None,
-                "session":    row.session,
+                "event_name": _collapse_event_names(item["event_names"]),
+                "event_names": item["event_names"],
+                "slot": item["slot"],
+                "sem": item["sem"],
+                "date": str(item["date"]) if item["date"] else None,
+                "session": item["session"],
             }
-            for row in results
+            for item in grouped.values()
         ]
     }
 
@@ -152,18 +231,16 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
         db.query(
             SeatAllocation.row,
             SeatAllocation.col,
+            SeatAllocation.course_id,
             Room.room_number,
             Course.code.label("course_code"),
             Course.name.label("course_name"),
-            Exam.event_name,
-            Exam.session,
             Allocation.slot,
             Allocation.semester,
         )
         .join(Room,       Room.id       == SeatAllocation.room_id)
         .join(Course,     Course.id     == SeatAllocation.course_id)
         .join(Allocation, Allocation.id == SeatAllocation.allocation_id)
-        .join(Exam,       Exam.id       == Allocation.exam_id)
         .filter(
             SeatAllocation.student_id    == student.id,
             SeatAllocation.allocation_id == active_window.allocation_id,
@@ -173,11 +250,30 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
     if not seat:
         raise HTTPException(status_code=404, detail="no_seat_found")
 
+    allocation = (
+        db.query(Allocation)
+        .filter(Allocation.id == active_window.allocation_id)
+        .first()
+    )
+    if not allocation:
+        raise HTTPException(status_code=404, detail="no_allocation_found")
+
+    exam = _get_student_exam_for_allocation(
+        student_id=student.id,
+        course_id=seat.course_id,
+        allocation=allocation,
+        db=db,
+    )
+    if not exam:
+        exam = _get_preferred_exam_for_allocation(active_window.allocation_id, db)
+    if not exam:
+        raise HTTPException(status_code=404, detail="no_exam_found")
+
     col_letter  = chr(ord("A") + seat.col)       # 0→A, 1→B, 2→C …
     seat_number = f"{seat.row + 1}{col_letter}"  # row+1: 0→1, 1→2, etc.
     
     # Convert session to abbreviation: FORENOON->FN, AFTERNOON->AN
-    session_abbr = "FN" if seat.session and "FORENOON" in seat.session.upper() else "AN"
+    session_abbr = "FN" if exam.session and "FORENOON" in exam.session.upper() else "AN"
 
     return {
         "reg_no":      student.reg_no,
@@ -188,7 +284,7 @@ def student_lookup(reg_no: str, db: Session = Depends(get_db)):
         "col_label":   col_letter,
         "course_code": seat.course_code,
         "course_name": seat.course_name,
-        "event_name":  seat.event_name,
+        "event_name":  exam.event_name,
         "sem":         seat.semester,
         "slot":        seat.slot,
         "session":     session_abbr,

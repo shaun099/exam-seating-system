@@ -41,12 +41,46 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, disabled, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
+
+    const [isClickedInactive, setIsClickedInactive] = React.useState(false)
+    const timeoutRef = React.useRef<number | null>(null)
+
+    React.useEffect(() => {
+      return () => {
+        if (timeoutRef.current !== null) {
+          window.clearTimeout(timeoutRef.current)
+        }
+      }
+    }, [])
+
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      onClick?.(event)
+
+      if (event.defaultPrevented || asChild || disabled || isClickedInactive) {
+        return
+      }
+
+      setIsClickedInactive(true)
+
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current)
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        setIsClickedInactive(false)
+      }, 450)
+    }
+
+    const isDisabled = Boolean(disabled || isClickedInactive)
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        onClick={handleClick}
+        {...(!asChild ? { disabled: isDisabled } : {})}
         {...props}
       />
     )
