@@ -6,6 +6,8 @@ import { Button } from "@/component/ui/button";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 import { RoomDetails } from "./roomdetails";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 interface RoomRecord {
   id: string;
   roomId: string;
@@ -22,6 +24,13 @@ interface ApiRoom {
   cols: number;
 }
 
+interface UpdatedRoomData {
+  id: string;
+  hallName: string;
+  rows: number;
+  columns: number;
+}
+
 export default function RoomConfig() {
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,11 +42,11 @@ export default function RoomConfig() {
 
   // ✅ FETCH ROOMS
   const fetchRooms = async (): Promise<RoomRecord[]> => {
-    const res = await fetch("http://127.0.0.1:8000/api/v1/upload/rooms");
+    const res = await fetch(`${API_URL}/api/v1/upload/rooms`);
     const data: ApiRoom[] = await res.json();
 
     return data
-      .sort((a, b) => a.id - b.id)   // 🔥 FIX (VERY IMPORTANT)
+      .sort((a, b) => a.id - b.id) // 🔥 FIX (VERY IMPORTANT)
       .map((room) => ({
         id: room.id.toString(),
         roomId: room.room_number,
@@ -66,23 +75,21 @@ export default function RoomConfig() {
   const filteredRooms = useMemo(() => {
     const searchLower = searchTerm.toLowerCase();
     return rooms.filter((room) =>
-      room.roomId.toLowerCase().includes(searchLower)
+      room.roomId.toLowerCase().includes(searchLower),
     );
   }, [searchTerm, rooms]);
 
   // 📊 STATS
   const totalRooms = filteredRooms.length;
   const totalCapacity = filteredRooms.reduce((sum, r) => sum + r.capacity, 0);
-  const avgPerRoom = totalRooms
-    ? Math.round(totalCapacity / totalRooms)
-    : 0;
+  const avgPerRoom = totalRooms ? Math.round(totalCapacity / totalRooms) : 0;
 
   // 📥 CSV UPLOAD
   const handleFileSelect = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
 
-    await fetch("http://127.0.0.1:8000/api/v1/upload/rooms", {
+    await fetch(`${API_URL}/api/v1/upload/rooms`, {
       method: "POST",
       body: formData,
     });
@@ -102,31 +109,32 @@ export default function RoomConfig() {
 
   // 🗑️ DELETE
   const handleDeleteRoom = async (roomId: string) => {
-  const confirmDelete = window.confirm("Are you sure you want to delete this room?");
-
-  if (!confirmDelete) return;
-
-  try {
-    const res = await fetch(
-      `http://127.0.0.1:8000/api/v1/upload/rooms/${Number(roomId)}`,
-      { method: "DELETE" }
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this room?",
     );
 
-    if (!res.ok) {
-      alert("Failed to delete room ❌");
-      return;
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/upload/rooms/${Number(roomId)}`,
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) {
+        alert("Failed to delete room ❌");
+        return;
+      }
+
+      alert("Room deleted successfully ✅");
+
+      await refreshRooms();
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting room ❌");
     }
+  };
 
-    alert("Room deleted successfully ✅");
-
-    await refreshRooms();
-
-  } catch (err) {
-    console.error(err);
-    alert("Error deleting room ❌");
-  }
-};
-     
   // ➕ ADD
   const handleAddNewRoom = () => {
     setSelectedRoom({
@@ -141,75 +149,69 @@ export default function RoomConfig() {
   };
 
   // 💾 SAVE
-  const handleSaveRoomDetails = async (updatedRoom: any) => {
-  try {
-    const payload = {
-      room_number: (updatedRoom.hallName || "").trim(),
-      rows: Number(updatedRoom.rows) || 0,
-      columns: Number(updatedRoom.columns) || 0
-    };
+  const handleSaveRoomDetails = async (updatedRoom: UpdatedRoomData) => {
+    try {
+      const payload = {
+        room_number: (updatedRoom.hallName || "").trim(),
+        rows: Number(updatedRoom.rows) || 0,
+        columns: Number(updatedRoom.columns) || 0,
+      };
 
-    if (!payload.room_number) {
-      alert("Room name required ❌");
-      return;
-    }
+      if (!payload.room_number) {
+        alert("Room name required ❌");
+        return;
+      }
 
-    if (payload.rows <= 0 || payload.columns <= 0) {
-      alert("Rows & Columns must be > 0 ❌");
-      return;
-    }
+      if (payload.rows <= 0 || payload.columns <= 0) {
+        alert("Rows & Columns must be > 0 ❌");
+        return;
+      }
 
-    let res;
+      let res;
 
-    // 🔥 ✅ CHECK: EDIT OR CREATE
-    if (updatedRoom.id) {
-      // ✏️ UPDATE
-      res = await fetch(
-        `http://127.0.0.1:8000/api/v1/upload/rooms/${updatedRoom.id}`,
-        {
+      // 🔥 ✅ CHECK: EDIT OR CREATE
+      if (updatedRoom.id) {
+        // ✏️ UPDATE
+        res = await fetch(`${API_URL}/api/v1/upload/rooms/${updatedRoom.id}`, {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload)
-        }
-      );
-    } else {
-      // ➕ CREATE
-      res = await fetch(
-        "http://127.0.0.1:8000/api/v1/upload/rooms/create",
-        {
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // ➕ CREATE
+        res = await fetch(`${API_URL}/api/v1/upload/rooms/create`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload)
-        }
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!res.ok) {
+        const errTEXT = await res.text();
+        console.error("API ERROR:", errTEXT);
+        alert(errTEXT);
+        return;
+      }
+
+      alert(
+        updatedRoom.id
+          ? "Room updated successfully ✅"
+          : "Room added successfully ✅",
       );
+
+      await refreshRooms(); // 🔥 IMPORTANT: reload from DB
+
+      setShowRoomDetails(false);
+      setSelectedRoom(null);
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong ❌");
     }
-
-    if (!res.ok) {
-      const errTEXT = await res.text();
-      console.error("API ERROR:", errTEXT);
-      alert(errTEXT);
-      return;
-    }
-
-    alert(updatedRoom.id ? "Room updated successfully ✅" : "Room added successfully ✅");
-
-    await refreshRooms(); // 🔥 IMPORTANT: reload from DB
-
-    setShowRoomDetails(false);
-    setSelectedRoom(null);
-
-  } catch (err) {
-    console.error(err);
-    alert("Something went wrong ❌");
-  }
-};
-
-
-
+  };
 
   const clearSearch = () => {
     setSearchTerm("");
@@ -238,7 +240,9 @@ export default function RoomConfig() {
       <div className="p-6 space-y-6 max-w-7xl mx-auto pb-12">
         {/* HEADER */}
         <div className="flex justify-between items-center flex-wrap gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Room Configuration</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Room Configuration
+          </h1>
 
           <div className="flex gap-2">
             <Button onClick={() => fileInputRef.current?.click()}>
@@ -291,7 +295,9 @@ export default function RoomConfig() {
           <Card>
             <CardContent className="p-6">
               <div className="text-sm text-gray-600 mb-1">Total Rooms</div>
-              <div className="text-3xl font-bold text-gray-900">{totalRooms}</div>
+              <div className="text-3xl font-bold text-gray-900">
+                {totalRooms}
+              </div>
               {searchTerm && rooms.length > 0 && (
                 <div className="text-xs text-gray-400 mt-1">
                   of {rooms.length} total
@@ -299,11 +305,13 @@ export default function RoomConfig() {
               )}
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-6">
               <div className="text-sm text-gray-600 mb-1">Total Capacity</div>
-              <div className="text-3xl font-bold text-gray-900">{totalCapacity}</div>
+              <div className="text-3xl font-bold text-gray-900">
+                {totalCapacity}
+              </div>
               {searchTerm && rooms.length > 0 && (
                 <div className="text-xs text-gray-400 mt-1">
                   of {rooms.reduce((sum, r) => sum + r.capacity, 0)} total
@@ -311,11 +319,13 @@ export default function RoomConfig() {
               )}
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-6">
               <div className="text-sm text-gray-600 mb-1">Average per Room</div>
-              <div className="text-3xl font-bold text-gray-900">{avgPerRoom}</div>
+              <div className="text-3xl font-bold text-gray-900">
+                {avgPerRoom}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -326,11 +336,21 @@ export default function RoomConfig() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b sticky top-0">
                 <tr>
-                  <th className="text-left p-4 font-semibold text-gray-700">Room</th>
-                  <th className="text-left p-4 font-semibold text-gray-700">Rows</th>
-                  <th className="text-left p-4 font-semibold text-gray-700">Cols</th>
-                  <th className="text-left p-4 font-semibold text-gray-700">Capacity</th>
-                  <th className="text-left p-4 font-semibold text-gray-700">Actions</th>
+                  <th className="text-left p-4 font-semibold text-gray-700">
+                    Room
+                  </th>
+                  <th className="text-left p-4 font-semibold text-gray-700">
+                    Rows
+                  </th>
+                  <th className="text-left p-4 font-semibold text-gray-700">
+                    Cols
+                  </th>
+                  <th className="text-left p-4 font-semibold text-gray-700">
+                    Capacity
+                  </th>
+                  <th className="text-left p-4 font-semibold text-gray-700">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -377,7 +397,10 @@ export default function RoomConfig() {
                     </button>
                   </div>
                 ) : (
-                  <p>No rooms configured yet. Click "Add Room" or "Import CSV" to get started.</p>
+                  <p>
+                    No rooms configured yet. Click "Add Room" or "Import CSV" to
+                    get started.
+                  </p>
                 )}
               </div>
             )}
