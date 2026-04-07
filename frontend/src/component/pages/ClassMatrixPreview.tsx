@@ -18,9 +18,9 @@ interface PreviewResponse { event_name: string; date: string; sem: string; slot:
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
-const PREVIEW_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix/preview/`;
-const REPLACE_ROOM_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix/replace-room/`;
-const DOWNLOAD_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix/`;
+const PREVIEW_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix/preview`;
+const REPLACE_ROOM_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix/replace-room`;
+const DOWNLOAD_ENDPOINT = `${API_BASE}/api/v1/download/classMatrix`;
 
 const CC = [
   { h: "bg-blue-100 text-blue-800",    c: "bg-blue-50",    b: "bg-blue-100 text-blue-700" },
