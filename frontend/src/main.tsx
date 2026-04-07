@@ -12,5 +12,5 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/find-my-seat" element={<StudentSeatingPage />} />
       </Routes>
     </BrowserRouter>
-  </StrictMode>,
+  </StrictMode>
 );
